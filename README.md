@@ -138,6 +138,18 @@ num2tab C13 --ox -o C13.png
 num2tab Am --ox -v -o Am.svg
 ```
 
+## サンプル出力
+
+### 横向き（デフォルト）
+
+| C | Am | G | F | G7 |
+|---|----|----|---|-----|
+| ![C](docs/images/C.png) | ![Am](docs/images/Am.png) | ![G](docs/images/G.png) | ![F](docs/images/F.png) | ![G7](docs/images/G7.png) |
+
+### 縦向き（`--vertical`）
+
+![Am vertical](docs/images/Am_vertical.png)
+
 ## 依存クレート
 
 - [image](https://crates.io/crates/image) 0.25
