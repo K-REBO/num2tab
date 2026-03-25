@@ -3,3 +3,7 @@
 *.jpg
 *.jpeg
 *.svg
+!docs/images/*.png
+!docs/images/*.jpg
+!docs/images/*.jpeg
+!docs/images/*.svg
