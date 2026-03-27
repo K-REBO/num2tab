@@ -1,6 +1,7 @@
-use num2tab::chord::{best_caged_voicing, best_voicing_for_tuning, caged_voicing_by_shape, parse_chord_name};
+use num2tab::chord::{best_caged_voicing, caged_voicing_by_shape, parse_chord_name};
 use num2tab::{
-    fret_count, get_string_open, parse_fret_string, render_horizontal, render_vertical,
+    fret_count, get_string_open, parse_fret_string, parse_tuning,
+    render_horizontal, render_vertical,
     render_svg_horizontal, render_svg_vertical, Canvas, FretPos, LayoutParams,
 };
 use clap::{CommandFactory, FromArgMatches, Parser};
@@ -58,8 +59,14 @@ struct Args {
     show_notes: bool,
 
     /// Number of strings: 4 (bass), 6 (standard guitar, default), 7 (seven-string guitar)
+    /// Ignored when --tuning is specified (string count is derived from tuning length)
     #[arg(long = "strings", default_value = "6")]
     strings: u32,
+
+    /// Custom tuning as note names low to high (e.g. EADGBE, DADGBbE, DADGAD)
+    /// Overrides --strings. Chord name input requires standard tuning (EADGBE).
+    #[arg(long = "tuning")]
+    tuning: Option<String>,
 }
 
 // ==================== フォント ====================
@@ -338,6 +345,7 @@ fn main() {
             .mut_arg("caged_d", |a| a.help("CAGED D形状を使用（6弦コード名入力時のみ有効）"))
             .mut_arg("show_notes", |a| a.help("押弦位置に音名を表示（ドットの代わり）"))
             .mut_arg("strings", |a| a.help("弦数: 4（ベース）, 6（標準ギター、デフォルト）, 7（7弦ギター）"))
+            .mut_arg("tuning", |a| a.help("変則チューニング（低音弦→高音弦の音名, 例: EADGBE, DADGBbE, DADGAD）"))
             .get_matches();
         Args::from_arg_matches(&matches).unwrap_or_else(|e| e.exit())
     } else {
@@ -346,7 +354,26 @@ fn main() {
     let ja = is_japanese_locale();
 
     let output = args.output.unwrap_or_else(|| auto_output_name(&args.input));
-    let string_open = get_string_open(args.strings);
+
+    // --tuning が指定されていればパースして使用、なければ --strings から取得
+    let custom_tuning: Option<Vec<u8>> = if let Some(ref t) = args.tuning {
+        match parse_tuning(t) {
+            Some(v) => Some(v),
+            None => {
+                if ja {
+                    eprintln!("エラー: チューニング '{}' を解析できません。音名 (A-G, # or b) を低音弦から順に並べてください (例: EADGBE, DADGBbE)", t);
+                } else {
+                    eprintln!("Error: Cannot parse tuning '{}'. Provide note names (A-G, # or b) low to high (e.g. EADGBE, DADGBbE)", t);
+                }
+                std::process::exit(1);
+            }
+        }
+    } else {
+        None
+    };
+
+    let string_open: &[u8] = custom_tuning.as_deref().unwrap_or_else(|| get_string_open(args.strings));
+    let string_count = string_open.len();
 
     let caged_shape: Option<char> = if args.caged_c { Some('C') }
         else if args.caged_a { Some('A') }
@@ -355,25 +382,22 @@ fn main() {
         else if args.caged_d { Some('D') }
         else { None };
 
-    let (frets, fret_offset) = if let Some(f) = parse_fret_string(&args.input, args.strings as usize) {
+    let is_standard_tuning = string_open == get_string_open(6);
+
+    let (frets, fret_offset) = if let Some(f) = parse_fret_string(&args.input, string_count) {
         (f, args.fret)
     } else if let Some(chord) = parse_chord_name(&args.input) {
-        let is_standard = args.strings == 6;
-        let voicing = if is_standard {
-            if let Some(shape) = caged_shape {
-                caged_voicing_by_shape(&chord, shape)
+        let voicing = if !is_standard_tuning {
+            if ja {
+                eprintln!("エラー: コード名入力は標準チューニング (EADGBE) のみ対応しています。フレット番号文字列を使用してください");
             } else {
-                best_caged_voicing(&chord)
+                eprintln!("Error: Chord name input requires standard tuning (EADGBE). Use a fret number string instead.");
             }
+            std::process::exit(1);
+        } else if let Some(shape) = caged_shape {
+            caged_voicing_by_shape(&chord, shape)
         } else {
-            if caged_shape.is_some() {
-                if ja {
-                    eprintln!("警告: CAGED形状指定は標準6弦チューニングのみ有効です。最良ボイシングを使用します。");
-                } else {
-                    eprintln!("Warning: CAGED shape selection is only valid for standard 6-string tuning. Using best voicing.");
-                }
-            }
-            best_voicing_for_tuning(&chord, string_open)
+            best_caged_voicing(&chord)
         };
         match voicing {
             Some((f, fo)) => (f, if args.fret > 0 { args.fret } else { fo }),
@@ -389,10 +413,10 @@ fn main() {
     } else {
         if ja {
             eprintln!("エラー: 入力を解析できません。{}桁フレット番号またはコード名を指定してください (例: 320003, C, Am, G7)",
-                args.strings);
+                string_count);
         } else {
             eprintln!("Error: Cannot parse input. Provide a {}-digit fret number or chord name (e.g. 320003, C, Am, G7)",
-                args.strings);
+                string_count);
         }
         std::process::exit(1);
     };
