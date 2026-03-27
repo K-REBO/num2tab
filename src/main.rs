@@ -49,6 +49,10 @@ struct Args {
     /// CAGED D形状を使用（コード名入力時のみ有効）
     #[arg(short = 'D', long = "caged-d")]
     caged_d: bool,
+
+    /// 押弦位置に音名を表示（ドットの代わり）
+    #[arg(short = 'n', long = "notes")]
+    show_notes: bool,
 }
 
 // ==================== データ型 ====================
@@ -88,6 +92,17 @@ static DIGIT_FONT: [[u8; 7]; 10] = [
     [0b11110, 0b00010, 0b00010, 0b00100, 0b01000, 0b01000, 0b01000], // 7
     [0b11110, 0b10010, 0b10010, 0b11110, 0b10010, 0b10010, 0b11110], // 8
     [0b11110, 0b10010, 0b10010, 0b11110, 0b00010, 0b00010, 0b11110], // 9
+];
+
+static NOTE_CHAR_FONT: [(char, [u8; 7]); 8] = [
+    ('A', [0b01110, 0b10001, 0b10001, 0b11111, 0b10001, 0b10001, 0b10001]),
+    ('B', [0b11110, 0b10001, 0b10001, 0b11110, 0b10001, 0b10001, 0b11110]),
+    ('C', [0b01110, 0b10001, 0b10000, 0b10000, 0b10000, 0b10001, 0b01110]),
+    ('D', [0b11110, 0b10001, 0b10001, 0b10001, 0b10001, 0b10001, 0b11110]),
+    ('E', [0b11111, 0b10000, 0b10000, 0b11110, 0b10000, 0b10000, 0b11111]),
+    ('F', [0b11111, 0b10000, 0b10000, 0b11110, 0b10000, 0b10000, 0b10000]),
+    ('G', [0b01110, 0b10000, 0b10000, 0b10011, 0b10001, 0b10001, 0b01111]),
+    ('#', [0b01010, 0b01010, 0b11111, 0b01010, 0b11111, 0b01010, 0b01010]),
 ];
 
 fn draw_digit(
@@ -180,8 +195,61 @@ fn draw_muted_marker(
     }
 }
 
+fn draw_char(
+    img: &mut ImageBuffer<Rgb<u8>, Vec<u8>>,
+    c: char,
+    x: i32,
+    y: i32,
+    scale: u32,
+    color: Rgb<u8>,
+) {
+    let pattern: Option<&[u8; 7]> = if c.is_ascii_digit() {
+        Some(&DIGIT_FONT[(c as u8 - b'0') as usize])
+    } else {
+        NOTE_CHAR_FONT.iter().find(|(ch, _)| *ch == c).map(|(_, p)| p)
+    };
+    let Some(pattern) = pattern else { return };
+    for (row, &bits) in pattern.iter().enumerate() {
+        for col in 0..5u32 {
+            if (bits >> (4 - col)) & 1 == 1 {
+                for dy in 0..scale {
+                    for dx in 0..scale {
+                        let px = x + (col * scale) as i32 + dx as i32;
+                        let py = y + (row as u32 * scale) as i32 + dy as i32;
+                        if px >= 0 && py >= 0 && px < img.width() as i32 && py < img.height() as i32 {
+                            img.put_pixel(px as u32, py as u32, color);
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
 fn draw_dot(img: &mut ImageBuffer<Rgb<u8>, Vec<u8>>, cx: i32, cy: i32, r: i32, color: Rgb<u8>) {
     draw_filled_circle_mut(img, (cx, cy), r, color);
+}
+
+fn draw_note_label(img: &mut ImageBuffer<Rgb<u8>, Vec<u8>>, note: &str, cx: i32, cy: i32) {
+    let white = Rgb([255u8, 255u8, 255u8]);
+    let black = Rgb([0u8, 0u8, 0u8]);
+    draw_filled_circle_mut(img, (cx, cy), 8, black);
+    let n = note.len() as i32;
+    let total_w = n * 5 + (n - 1); // 5px/char + 1px gap
+    let x0 = cx - total_w / 2;
+    let y0 = cy - 3; // 7px高さを中央揃え
+    for (i, c) in note.chars().enumerate() {
+        draw_char(img, c, x0 + i as i32 * 6, y0, 1, white);
+    }
+}
+
+// 開放弦の半音値: E A D G B e (C=0)
+const STRING_OPEN: [u8; 6] = [4, 9, 2, 7, 11, 4];
+const NOTE_NAMES: [&str; 12] = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
+
+fn string_note(string_idx: usize, fret: u8, fret_offset: u32) -> &'static str {
+    let semitone = (STRING_OPEN[string_idx] as u32 + fret as u32 + fret_offset) % 12;
+    NOTE_NAMES[semitone as usize]
 }
 
 fn fret_count(frets: &[FretPos]) -> u32 {
@@ -202,6 +270,7 @@ fn draw_horizontal(
     frets: &[FretPos],
     show_ox: bool,
     fret_offset: u32,
+    show_notes: bool,
 ) -> ImageBuffer<Rgb<u8>, Vec<u8>> {
     let string_count = frets.len() as u32;
     let fret_count = fret_count(frets);
@@ -275,7 +344,11 @@ fn draw_horizontal(
         if let FretPos::Fret(n) = fret_pos {
             let cx = left_margin as i32 + *n as i32 * fret_spacing as i32 - fret_spacing as i32 / 2;
             let cy = (top_margin + invert_string(s, string_count) * string_spacing) as i32;
-            draw_dot(&mut img, cx, cy, dot_r, black);
+            if show_notes {
+                draw_note_label(&mut img, string_note(s, *n, fret_offset), cx, cy);
+            } else {
+                draw_dot(&mut img, cx, cy, dot_r, black);
+            }
         }
     }
 
@@ -288,6 +361,7 @@ fn draw_vertical(
     frets: &[FretPos],
     show_ox: bool,
     fret_offset: u32,
+    show_notes: bool,
 ) -> ImageBuffer<Rgb<u8>, Vec<u8>> {
     let string_count = frets.len() as u32;
     let fret_count = fret_count(frets);
@@ -363,10 +437,12 @@ fn draw_vertical(
     for (s, fret_pos) in frets.iter().enumerate() {
         if let FretPos::Fret(n) = fret_pos {
             let cx = (left_margin + s as u32 * string_spacing) as i32;
-            let cy = top_margin as i32
-                + *n as i32 * fret_spacing as i32
-                - fret_spacing as i32 / 2;
-            draw_dot(&mut img, cx, cy, dot_r, black);
+            let cy = top_margin as i32 + *n as i32 * fret_spacing as i32 - fret_spacing as i32 / 2;
+            if show_notes {
+                draw_note_label(&mut img, string_note(s, *n, fret_offset), cx, cy);
+            } else {
+                draw_dot(&mut img, cx, cy, dot_r, black);
+            }
         }
     }
 
@@ -375,16 +451,16 @@ fn draw_vertical(
 
 // ==================== SVG 出力 ====================
 
-fn save_svg(frets: &[FretPos], show_ox: bool, vertical: bool, fret_offset: u32, path: &str) {
+fn save_svg(frets: &[FretPos], show_ox: bool, vertical: bool, fret_offset: u32, show_notes: bool, path: &str) {
     let svg = if vertical {
-        render_svg_vertical(frets, show_ox, fret_offset)
+        render_svg_vertical(frets, show_ox, fret_offset, show_notes)
     } else {
-        render_svg_horizontal(frets, show_ox, fret_offset)
+        render_svg_horizontal(frets, show_ox, fret_offset, show_notes)
     };
     fs::write(path, svg).expect("SVG保存失敗");
 }
 
-fn render_svg_horizontal(frets: &[FretPos], show_ox: bool, fret_offset: u32) -> String {
+fn render_svg_horizontal(frets: &[FretPos], show_ox: bool, fret_offset: u32, show_notes: bool) -> String {
     let string_count = frets.len() as u32;
     let fret_count = fret_count(frets);
 
@@ -472,8 +548,15 @@ fn render_svg_horizontal(frets: &[FretPos], show_ox: bool, fret_offset: u32) -> 
         if let FretPos::Fret(n) = fret_pos {
             let cx = lm + *n as u32 * fs - fs / 2;
             let cy = tm + invert_string(i, string_count) * ss;
-            s += &format!(r#"<circle cx="{cx}" cy="{cy}" r="7" fill="black"/>
+            if show_notes {
+                let note = string_note(i, *n, fret_offset);
+                s += &format!(r#"<circle cx="{cx}" cy="{cy}" r="8" fill="black"/>
+<text x="{cx}" y="{cy}" text-anchor="middle" dominant-baseline="middle" font-size="8" font-family="monospace" font-weight="bold" fill="white">{note}</text>
 "#);
+            } else {
+                s += &format!(r#"<circle cx="{cx}" cy="{cy}" r="7" fill="black"/>
+"#);
+            }
         }
     }
 
@@ -481,7 +564,7 @@ fn render_svg_horizontal(frets: &[FretPos], show_ox: bool, fret_offset: u32) -> 
     s
 }
 
-fn render_svg_vertical(frets: &[FretPos], show_ox: bool, fret_offset: u32) -> String {
+fn render_svg_vertical(frets: &[FretPos], show_ox: bool, fret_offset: u32, show_notes: bool) -> String {
     let string_count = frets.len() as u32;
     let fret_count = fret_count(frets);
 
@@ -570,8 +653,15 @@ fn render_svg_vertical(frets: &[FretPos], show_ox: bool, fret_offset: u32) -> St
         if let FretPos::Fret(n) = fret_pos {
             let cx = lm + i as u32 * ss;
             let cy = tm + *n as u32 * fs - fs / 2;
-            s += &format!(r#"<circle cx="{cx}" cy="{cy}" r="7" fill="black"/>
+            if show_notes {
+                let note = string_note(i, *n, fret_offset);
+                s += &format!(r#"<circle cx="{cx}" cy="{cy}" r="8" fill="black"/>
+<text x="{cx}" y="{cy}" text-anchor="middle" dominant-baseline="middle" font-size="8" font-family="monospace" font-weight="bold" fill="white">{note}</text>
 "#);
+            } else {
+                s += &format!(r#"<circle cx="{cx}" cy="{cy}" r="7" fill="black"/>
+"#);
+            }
         }
     }
 
@@ -622,12 +712,12 @@ fn main() {
         .to_lowercase();
 
     if ext == "svg" {
-        save_svg(&frets, args.enable_ox_marker, args.vertical, fret_offset, &args.output);
+        save_svg(&frets, args.enable_ox_marker, args.vertical, fret_offset, args.show_notes, &args.output);
     } else {
         let img = if args.vertical {
-            draw_vertical(&frets, args.enable_ox_marker, fret_offset)
+            draw_vertical(&frets, args.enable_ox_marker, fret_offset, args.show_notes)
         } else {
-            draw_horizontal(&frets, args.enable_ox_marker, fret_offset)
+            draw_horizontal(&frets, args.enable_ox_marker, fret_offset, args.show_notes)
         };
         img.save(&args.output).expect("画像保存失敗");
     }
