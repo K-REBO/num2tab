@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>num2tab — Guitar Chord Diagram Generator</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: system-ui, sans-serif;
+      background: #f5f5f5;
+      color: #222;
+      padding: 2rem;
+    }
+    h1 { font-size: 1.6rem; margin-bottom: 0.25rem; }
+    p.subtitle { color: #666; margin-bottom: 1.5rem; font-size: 0.9rem; }
+    .card {
+      background: white;
+      border-radius: 8px;
+      padding: 1.5rem;
+      max-width: 560px;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.1);
+    }
+    label { display: block; font-size: 0.85rem; font-weight: 600; margin-bottom: 0.3rem; color: #444; }
+    input[type="text"] {
+      width: 100%;
+      padding: 0.5rem 0.75rem;
+      font-size: 1rem;
+      border: 1px solid #ccc;
+      border-radius: 6px;
+      margin-bottom: 1rem;
+      font-family: monospace;
+    }
+    input[type="text"]:focus { outline: none; border-color: #666; }
+    .options {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.75rem;
+      margin-bottom: 1rem;
+    }
+    .options label {
+      display: flex;
+      align-items: center;
+      gap: 0.3rem;
+      font-weight: normal;
+      cursor: pointer;
+    }
+    input[type="checkbox"] { cursor: pointer; }
+    button {
+      background: #222;
+      color: white;
+      border: none;
+      padding: 0.55rem 1.4rem;
+      border-radius: 6px;
+      font-size: 0.95rem;
+      cursor: pointer;
+      transition: background 0.15s;
+    }
+    button:hover { background: #444; }
+    button:disabled { background: #aaa; cursor: default; }
+    #output {
+      margin-top: 1.5rem;
+      text-align: center;
+    }
+    #output svg { max-width: 100%; }
+    #error {
+      margin-top: 1rem;
+      color: #c00;
+      font-size: 0.85rem;
+    }
+    .hint {
+      font-size: 0.78rem;
+      color: #888;
+      margin-top: -0.7rem;
+      margin-bottom: 1rem;
+    }
+    #loading { color: #888; font-size: 0.85rem; }
+  </style>
+</head>
+<body>
+  <h1>num2tab</h1>
+  <p class="subtitle">Guitar chord diagram generator — powered by WebAssembly</p>
+
+  <div class="card">
+    <label for="input">Chord or fret string</label>
+    <input type="text" id="input" placeholder="C, Am, G7, 320003, x32010…" value="C" />
+    <p class="hint">Examples: <code>C</code> &nbsp;·&nbsp; <code>Am</code> &nbsp;·&nbsp; <code>G7</code> &nbsp;·&nbsp; <code>320003</code> &nbsp;·&nbsp; <code>x32010</code></p>
+
+    <div class="options">
+      <label><input type="checkbox" id="vertical" /> Vertical layout</label>
+      <label><input type="checkbox" id="show_ox" checked /> Show o/x markers</label>
+      <label><input type="checkbox" id="show_notes" /> Show note names</label>
+    </div>
+
+    <button id="btn" onclick="generate()">Generate</button>
+    <span id="loading" style="display:none; margin-left:0.75rem;">Loading WASM…</span>
+    <div id="error"></div>
+    <div id="output"></div>
+  </div>
+
+  <script type="module">
+    import init, { chord_to_svg } from './pkg/num2tab.js';
+
+    let ready = false;
+
+    async function load() {
+      document.getElementById('loading').style.display = 'inline';
+      document.getElementById('btn').disabled = true;
+      await init();
+      ready = true;
+      document.getElementById('loading').style.display = 'none';
+      document.getElementById('btn').disabled = false;
+      // Auto-generate on load
+      window.generate();
+    }
+
+    window.generate = function () {
+      if (!ready) return;
+      const input     = document.getElementById('input').value.trim();
+      const vertical  = document.getElementById('vertical').checked;
+      const show_ox   = document.getElementById('show_ox').checked;
+      const show_notes = document.getElementById('show_notes').checked;
+      const errEl     = document.getElementById('error');
+      const outEl     = document.getElementById('output');
+
+      errEl.textContent = '';
+      if (!input) { outEl.innerHTML = ''; return; }
+
+      try {
+        const svg = chord_to_svg(input, vertical, show_ox, 0, show_notes);
+        if (svg.startsWith('<!-- Error')) {
+          errEl.textContent = svg.replace(/<!--\s*|\s*-->/g, '');
+          outEl.innerHTML = '';
+        } else {
+          outEl.innerHTML = svg;
+        }
+      } catch (e) {
+        errEl.textContent = String(e);
+        outEl.innerHTML = '';
+      }
+    };
+
+    // Generate on Enter key
+    document.getElementById('input').addEventListener('keydown', e => {
+      if (e.key === 'Enter') window.generate();
+    });
+
+    load();
+  </script>
+</body>
+</html>

@@ -3,13 +3,24 @@ name = "num2tab"
 version = "0.1.0"
 edition = "2024"
 
+[lib]
+name = "num2tab"
+crate-type = ["cdylib", "rlib"]
+
 [profile.release]
 opt-level = "z"
 lto = true
 strip = true
 codegen-units = 1
 
+[features]
+wasm = ["dep:wasm-bindgen"]
+
+[package.metadata.wasm-pack.profile.release]
+wasm-opt = false
+
 [dependencies]
 image = "0.25"
 imageproc = "0.25"
 clap = { version = "4", features = ["derive"] }
+wasm-bindgen = { version = "0.2", optional = true }
