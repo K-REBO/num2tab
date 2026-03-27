@@ -301,13 +301,14 @@ fn draw_horizontal(
     for (s, fret_pos) in frets.iter().enumerate() {
         let y_px = top_margin + invert_string(s, string_count) * string_spacing;
         draw_line_segment_mut(&mut img, (x_left, y_px as f32), (x_right, y_px as f32), black);
-        if show_ox {
-            let cy = y_px as i32;
-            match fret_pos {
-                FretPos::Open => draw_open_marker(&mut img, marker_cx, cy, marker_r, black),
-                FretPos::Muted => draw_muted_marker(&mut img, marker_cx, cy, marker_r, black),
-                FretPos::Fret(_) => {}
+        let cy = y_px as i32;
+        match fret_pos {
+            FretPos::Open if show_notes => {
+                draw_note_label(&mut img, string_note(s, 0, 0), marker_cx, cy);
             }
+            FretPos::Open if show_ox => draw_open_marker(&mut img, marker_cx, cy, marker_r, black),
+            FretPos::Muted if show_ox => draw_muted_marker(&mut img, marker_cx, cy, marker_r, black),
+            _ => {}
         }
     }
 
@@ -392,13 +393,14 @@ fn draw_vertical(
     for (s, fret_pos) in frets.iter().enumerate() {
         let x_px = left_margin + s as u32 * string_spacing;
         draw_line_segment_mut(&mut img, (x_px as f32, y_top), (x_px as f32, y_bottom), black);
-        if show_ox {
-            let cx = x_px as i32;
-            match fret_pos {
-                FretPos::Open => draw_open_marker(&mut img, cx, marker_cy, marker_r, black),
-                FretPos::Muted => draw_muted_marker(&mut img, cx, marker_cy, marker_r, black),
-                FretPos::Fret(_) => {}
+        let cx = x_px as i32;
+        match fret_pos {
+            FretPos::Open if show_notes => {
+                draw_note_label(&mut img, string_note(s, 0, 0), cx, marker_cy);
             }
+            FretPos::Open if show_ox => draw_open_marker(&mut img, cx, marker_cy, marker_r, black),
+            FretPos::Muted if show_ox => draw_muted_marker(&mut img, cx, marker_cy, marker_r, black),
+            _ => {}
         }
     }
 
@@ -518,29 +520,33 @@ fn render_svg_horizontal(frets: &[FretPos], show_ox: bool, fret_offset: u32, sho
         );
     }
 
-    if show_ox {
-        let mx = lm / 2;
-        for (i, fret_pos) in frets.iter().enumerate() {
-            let cy = tm + invert_string(i, string_count) * ss;
-            match fret_pos {
-                FretPos::Open => {
-                    s += &format!(
-                        r#"<circle cx="{mx}" cy="{cy}" r="5" fill="none" stroke="black" stroke-width="2"/>
+    let mx = lm / 2;
+    for (i, fret_pos) in frets.iter().enumerate() {
+        let cy = tm + invert_string(i, string_count) * ss;
+        match fret_pos {
+            FretPos::Open if show_notes => {
+                let note = string_note(i, 0, 0);
+                s += &format!(r#"<circle cx="{mx}" cy="{cy}" r="8" fill="black"/>
+<text x="{mx}" y="{cy}" text-anchor="middle" dominant-baseline="middle" font-size="8" font-family="monospace" font-weight="bold" fill="white">{note}</text>
+"#);
+            }
+            FretPos::Open if show_ox => {
+                s += &format!(
+                    r#"<circle cx="{mx}" cy="{cy}" r="5" fill="none" stroke="black" stroke-width="2"/>
 "#
-                    );
-                }
-                FretPos::Muted => {
-                    let d = 4u32;
-                    s += &format!(
-                        r#"<line x1="{}" y1="{}" x2="{}" y2="{}" stroke="black" stroke-width="2"/>
+                );
+            }
+            FretPos::Muted if show_ox => {
+                let d = 4u32;
+                s += &format!(
+                    r#"<line x1="{}" y1="{}" x2="{}" y2="{}" stroke="black" stroke-width="2"/>
 <line x1="{}" y1="{}" x2="{}" y2="{}" stroke="black" stroke-width="2"/>
 "#,
-                        mx - d, cy - d, mx + d, cy + d,
-                        mx + d, cy - d, mx - d, cy + d
-                    );
-                }
-                FretPos::Fret(_) => {}
+                    mx - d, cy - d, mx + d, cy + d,
+                    mx + d, cy - d, mx - d, cy + d
+                );
             }
+            _ => {}
         }
     }
 
@@ -623,29 +629,33 @@ fn render_svg_vertical(frets: &[FretPos], show_ox: bool, fret_offset: u32, show_
         );
     }
 
-    if show_ox {
-        let my = tm / 2;
-        for (i, fret_pos) in frets.iter().enumerate() {
-            let cx = lm + i as u32 * ss;
-            match fret_pos {
-                FretPos::Open => {
-                    s += &format!(
-                        r#"<circle cx="{cx}" cy="{my}" r="5" fill="none" stroke="black" stroke-width="2"/>
+    let my = tm / 2;
+    for (i, fret_pos) in frets.iter().enumerate() {
+        let cx = lm + i as u32 * ss;
+        match fret_pos {
+            FretPos::Open if show_notes => {
+                let note = string_note(i, 0, 0);
+                s += &format!(r#"<circle cx="{cx}" cy="{my}" r="8" fill="black"/>
+<text x="{cx}" y="{my}" text-anchor="middle" dominant-baseline="middle" font-size="8" font-family="monospace" font-weight="bold" fill="white">{note}</text>
+"#);
+            }
+            FretPos::Open if show_ox => {
+                s += &format!(
+                    r#"<circle cx="{cx}" cy="{my}" r="5" fill="none" stroke="black" stroke-width="2"/>
 "#
-                    );
-                }
-                FretPos::Muted => {
-                    let d = 4u32;
-                    s += &format!(
-                        r#"<line x1="{}" y1="{}" x2="{}" y2="{}" stroke="black" stroke-width="2"/>
+                );
+            }
+            FretPos::Muted if show_ox => {
+                let d = 4u32;
+                s += &format!(
+                    r#"<line x1="{}" y1="{}" x2="{}" y2="{}" stroke="black" stroke-width="2"/>
 <line x1="{}" y1="{}" x2="{}" y2="{}" stroke="black" stroke-width="2"/>
 "#,
-                        cx - d, my - d, cx + d, my + d,
-                        cx + d, my - d, cx - d, my + d
-                    );
-                }
-                FretPos::Fret(_) => {}
+                    cx - d, my - d, cx + d, my + d,
+                    cx + d, my - d, cx - d, my + d
+                );
             }
+            _ => {}
         }
     }
 
