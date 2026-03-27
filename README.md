@@ -6,6 +6,8 @@ CLI tool to generate guitar chord diagram images.
 
 ---
 
+<video src="docs/images/usage.mp4" controls></video>
+
 | G | C `--ox` | F `--notes` | Fm7 `--vertical` |
 |---|----------|-------------|------------------|
 | ![G](docs/images/G.png) | ![C](docs/images/C_ox.png) | ![F notes](docs/images/F_notes.png) | ![Fm7 vertical](docs/images/Fm7_vertical.png) |

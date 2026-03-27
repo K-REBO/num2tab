@@ -6,6 +6,8 @@
 
 ---
 
+<video src="images/usage.mp4" controls></video>
+
 | G | C `--ox` | F `--notes` | Fm7 `--vertical` |
 |---|----------|-------------|------------------|
 | ![G](images/G.png) | ![C](images/C_ox.png) | ![F notes](images/F_notes.png) | ![Fm7 vertical](images/Fm7_vertical.png) |
