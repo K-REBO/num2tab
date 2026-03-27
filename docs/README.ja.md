@@ -6,9 +6,9 @@
 
 ---
 
-| C | Am | G | F | G7 |
-|---|----|----|---|-----|
-| ![C](images/C.png) | ![Am](images/Am.png) | ![G](images/G.png) | ![F](images/F.png) | ![G7](images/G7.png) |
+| G | C `--ox` | F `--notes` | Fm7 `--vertical` |
+|---|----------|-------------|------------------|
+| ![G](images/G.png) | ![C](images/C_ox.png) | ![F notes](images/F_notes.png) | ![Fm7 vertical](images/Fm7_vertical.png) |
 
 ---
 
@@ -66,38 +66,56 @@ num2tab C -o C.jpg    # JPEG
 num2tab C -o C.svg    # SVG
 ```
 
-### 表示方向
+### `--vertical` / `-v`
 
 ```bash
-# 横向き（デフォルト）: 弦が横、フレットが縦
-num2tab 320003 --ox -o G.png
-
-# 縦向き: 弦が縦、フレットが横
-num2tab 320003 --ox -v -o G_v.png
+num2tab Am --ox -v -o Am_v.png
 ```
 
-![Am vertical](images/Am_vertical.png)
+![vertical](images/option_vertical.png)
 
-### o/× マーカー
+### `--enable-ox-marker` / `--ox`
+
+開放弦（○）とミュート弦（×）マーカーを表示します。
 
 ```bash
-num2tab x32010 --ox -o C.png    # ○（開放弦）と ×（ミュート弦）を表示
+num2tab G --ox -o G.png
 ```
 
-### 音名表示（--notes）
+![ox marker](images/option_ox.png)
+
+### `--notes` / `-n`
+
+押弦位置・開放弦の音名（C, D#, F# …）をドットの代わりに表示します。
 
 ```bash
-num2tab G --notes -o G_notes.png       # ドットの代わりに G/B/D を表示
-num2tab Am --notes --ox -o Am_notes.png
-num2tab F --notes -o F_notes.svg       # SVG にも対応
+num2tab G --notes --ox -o G_notes.png
 ```
 
-### ハイポジション（--fret）
+![notes](images/option_notes.png)
+
+### `--fret N` / `-f`
+
+ハイポジションコードの表示開始フレットを指定します。
 
 ```bash
-# 5フレット目から表示
 num2tab 133211 --ox -f 5 -o Barre_F.png
 ```
+
+![fret offset](images/option_fret.png)
+
+### CAGED 形状指定（`-C` / `-A` / `-G` / `-E` / `-D`）
+
+コード名入力時に CAGED 形状を指定してボイシングを選択できます。
+
+```bash
+num2tab C -C --ox -o C_Cshape.png   # C 形状（ローポジ）
+num2tab C -E --ox -o C_Eshape.png   # E 形状（ハイポジ）
+```
+
+| C 形状 | E 形状 |
+|--------|--------|
+| ![C shape](images/option_caged_C.png) | ![E shape](images/option_caged_E.png) |
 
 ## コード名入力
 
@@ -125,17 +143,6 @@ num2tab 133211 --ox -f 5 -o Barre_F.png
 | `Caug` | Augmented | Caug, Eaug |
 
 > **記法ルール**: `M` = Major（大文字）、`m` = minor（小文字）
-
-### CAGED 形状指定
-
-コード名入力時に `-C`/`-A`/`-G`/`-E`/`-D` で形状を指定できます（6桁入力では無効）。
-
-```bash
-num2tab C --ox -o C_best.png    # 自動最適選択
-num2tab C -C --ox -o C_Cshape.png
-num2tab C -A --ox -o C_Ashape.png
-num2tab C -E --ox -o C_Eshape.png   # ハイポジション
-```
 
 ## 例
 
