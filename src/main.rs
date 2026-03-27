@@ -1,7 +1,7 @@
 mod chord;
 
 use chord::{best_caged_voicing, caged_voicing_by_shape, parse_chord_name};
-use clap::Parser;
+use clap::{CommandFactory, FromArgMatches, Parser};
 use image::{ImageBuffer, Rgb};
 use imageproc::drawing::{draw_filled_circle_mut, draw_line_segment_mut};
 use std::fs;
@@ -9,48 +9,48 @@ use std::fs;
 // ==================== CLI ====================
 
 #[derive(Parser)]
-#[command(name = "num2tab", about = "ギターコードダイアグラム生成")]
+#[command(name = "num2tab", about = "Guitar chord diagram generator")]
 struct Args {
-    /// 6桁フレット番号 または コード名 (例: 320003, x32010, C, Am, G7)
+    /// 6-digit fret number or chord name (e.g. 320003, x32010, C, Am, G7)
     input: String,
 
-    /// 縦向き表示（標準コードダイアグラム形式）
+    /// Vertical layout (standard chord diagram format)
     #[arg(short = 'v', long)]
     vertical: bool,
 
-    /// o/× マーカーを表示
+    /// Show o/x markers
     #[arg(long = "enable-ox-marker", alias = "ox")]
     enable_ox_marker: bool,
 
-    /// 表示開始フレット番号（デフォルト: 0）
+    /// Starting fret number (default: 0)
     #[arg(short = 'f', long = "fret", default_value = "0")]
     fret: u32,
 
-    /// 出力ファイル（拡張子で形式判定: .png .jpg .svg）
+    /// Output file (format determined by extension: .png .jpg .svg)
     #[arg(short, long, default_value = "out.png")]
     output: String,
 
-    /// CAGED C形状を使用（コード名入力時のみ有効）
+    /// Use CAGED C shape (only valid with chord name input)
     #[arg(short = 'C', long = "caged-c")]
     caged_c: bool,
 
-    /// CAGED A形状を使用（コード名入力時のみ有効）
+    /// Use CAGED A shape (only valid with chord name input)
     #[arg(short = 'A', long = "caged-a")]
     caged_a: bool,
 
-    /// CAGED G形状を使用（コード名入力時のみ有効）
+    /// Use CAGED G shape (only valid with chord name input)
     #[arg(short = 'G', long = "caged-g")]
     caged_g: bool,
 
-    /// CAGED E形状を使用（コード名入力時のみ有効）
+    /// Use CAGED E shape (only valid with chord name input)
     #[arg(short = 'E', long = "caged-e")]
     caged_e: bool,
 
-    /// CAGED D形状を使用（コード名入力時のみ有効）
+    /// Use CAGED D shape (only valid with chord name input)
     #[arg(short = 'D', long = "caged-d")]
     caged_d: bool,
 
-    /// 押弦位置に音名を表示（ドットの代わり）
+    /// Show note names at fretted positions (instead of dots)
     #[arg(short = 'n', long = "notes")]
     show_notes: bool,
 }
@@ -618,8 +618,35 @@ fn save_svg(frets: &[FretPos], show_ox: bool, vertical: bool, fret_offset: u32, 
 
 // ==================== main ====================
 
+fn is_japanese_locale() -> bool {
+    std::env::var("LANG")
+        .or_else(|_| std::env::var("LC_ALL"))
+        .or_else(|_| std::env::var("LC_MESSAGES"))
+        .map(|v| v.starts_with("ja"))
+        .unwrap_or(false)
+}
+
 fn main() {
-    let args = Args::parse();
+    let args = if is_japanese_locale() {
+        let matches = Args::command()
+            .about("ギターコードダイアグラム生成")
+            .mut_arg("input", |a| a.help("6桁フレット番号 または コード名 (例: 320003, x32010, C, Am, G7)"))
+            .mut_arg("vertical", |a| a.help("縦向き表示（標準コードダイアグラム形式）"))
+            .mut_arg("enable_ox_marker", |a| a.help("o/× マーカーを表示"))
+            .mut_arg("fret", |a| a.help("表示開始フレット番号（デフォルト: 0）"))
+            .mut_arg("output", |a| a.help("出力ファイル（拡張子で形式判定: .png .jpg .svg）"))
+            .mut_arg("caged_c", |a| a.help("CAGED C形状を使用（コード名入力時のみ有効）"))
+            .mut_arg("caged_a", |a| a.help("CAGED A形状を使用（コード名入力時のみ有効）"))
+            .mut_arg("caged_g", |a| a.help("CAGED G形状を使用（コード名入力時のみ有効）"))
+            .mut_arg("caged_e", |a| a.help("CAGED E形状を使用（コード名入力時のみ有効）"))
+            .mut_arg("caged_d", |a| a.help("CAGED D形状を使用（コード名入力時のみ有効）"))
+            .mut_arg("show_notes", |a| a.help("押弦位置に音名を表示（ドットの代わり）"))
+            .get_matches();
+        Args::from_arg_matches(&matches).unwrap_or_else(|e| e.exit())
+    } else {
+        Args::parse()
+    };
+    let ja = is_japanese_locale();
 
     let caged_shape: Option<char> = if args.caged_c { Some('C') }
         else if args.caged_a { Some('A') }
@@ -639,12 +666,20 @@ fn main() {
         match voicing {
             Some((f, fo)) => (f, if args.fret > 0 { args.fret } else { fo }),
             None => {
-                eprintln!("エラー: '{}' のボイシングが見つかりませんでした", args.input);
+                if ja {
+                    eprintln!("エラー: '{}' のボイシングが見つかりませんでした", args.input);
+                } else {
+                    eprintln!("Error: No voicing found for '{}'", args.input);
+                }
                 std::process::exit(1);
             }
         }
     } else {
-        eprintln!("エラー: 入力を解析できません。6桁フレット番号またはコード名を指定してください (例: 320003, C, Am, G7)");
+        if ja {
+            eprintln!("エラー: 入力を解析できません。6桁フレット番号またはコード名を指定してください (例: 320003, C, Am, G7)");
+        } else {
+            eprintln!("Error: Cannot parse input. Provide a 6-digit fret number or chord name (e.g. 320003, C, Am, G7)");
+        }
         std::process::exit(1);
     };
 
@@ -662,8 +697,12 @@ fn main() {
         } else {
             draw_horizontal(&frets, args.enable_ox_marker, fret_offset, args.show_notes)
         };
-        img.save(&args.output).expect("画像保存失敗");
+        img.save(&args.output).expect("Failed to save image");
     }
 
-    println!("{} を生成しました", args.output);
+    if ja {
+        println!("{} を生成しました", args.output);
+    } else {
+        println!("Generated {}", args.output);
+    }
 }
