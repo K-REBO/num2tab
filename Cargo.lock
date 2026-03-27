@@ -820,6 +820,7 @@ dependencies = [
  "clap",
  "image",
  "imageproc",
+ "wasm-bindgen",
 ]
 
 [[package]]

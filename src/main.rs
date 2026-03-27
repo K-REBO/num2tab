@@ -1,6 +1,6 @@
 use num2tab::chord::{best_caged_voicing, caged_voicing_by_shape, parse_chord_name};
 use num2tab::{
-    fret_count, parse_fret_string, render_horizontal, render_vertical,
+    fret_count, get_string_open, parse_fret_string, render_horizontal, render_vertical,
     render_svg_horizontal, render_svg_vertical, Canvas, FretPos, LayoutParams,
 };
 use clap::{CommandFactory, FromArgMatches, Parser};
@@ -13,7 +13,7 @@ use std::fs;
 #[derive(Parser)]
 #[command(name = "num2tab", about = "Guitar chord diagram generator")]
 struct Args {
-    /// 6-digit fret number or chord name (e.g. 320003, x32010, C, Am, G7)
+    /// Fret number string or chord name (e.g. 320003, x32010, C, Am, G7)
     input: String,
 
     /// Vertical layout (standard chord diagram format)
@@ -32,29 +32,33 @@ struct Args {
     #[arg(short, long, default_value = "out.png")]
     output: String,
 
-    /// Use CAGED C shape (only valid with chord name input)
+    /// Use CAGED C shape (only valid with chord name input on 6-string)
     #[arg(short = 'C', long = "caged-c")]
     caged_c: bool,
 
-    /// Use CAGED A shape (only valid with chord name input)
+    /// Use CAGED A shape (only valid with chord name input on 6-string)
     #[arg(short = 'A', long = "caged-a")]
     caged_a: bool,
 
-    /// Use CAGED G shape (only valid with chord name input)
+    /// Use CAGED G shape (only valid with chord name input on 6-string)
     #[arg(short = 'G', long = "caged-g")]
     caged_g: bool,
 
-    /// Use CAGED E shape (only valid with chord name input)
+    /// Use CAGED E shape (only valid with chord name input on 6-string)
     #[arg(short = 'E', long = "caged-e")]
     caged_e: bool,
 
-    /// Use CAGED D shape (only valid with chord name input)
+    /// Use CAGED D shape (only valid with chord name input on 6-string)
     #[arg(short = 'D', long = "caged-d")]
     caged_d: bool,
 
     /// Show note names at fretted positions (instead of dots)
     #[arg(short = 'n', long = "notes")]
     show_notes: bool,
+
+    /// Number of strings: 4 (bass), 6 (standard guitar, default), 7 (seven-string guitar)
+    #[arg(long = "strings", default_value = "6")]
+    strings: u32,
 }
 
 // ==================== フォント ====================
@@ -262,6 +266,7 @@ fn draw_horizontal(
     show_ox: bool,
     fret_offset: u32,
     show_notes: bool,
+    string_open: &[u8],
 ) -> ImageBuffer<Rgb<u8>, Vec<u8>> {
     let lp = LayoutParams::horizontal();
     let sc = frets.len() as u32;
@@ -269,7 +274,7 @@ fn draw_horizontal(
     let w = lp.left_margin + fc * lp.fret_spacing + lp.right_margin;
     let h = lp.top_margin + (sc - 1) * lp.string_spacing + lp.bottom_margin;
     let mut canvas = PngCanvas::new(w, h);
-    render_horizontal(&mut canvas, frets, &lp, show_ox, fret_offset, show_notes);
+    render_horizontal(&mut canvas, frets, &lp, show_ox, fret_offset, show_notes, string_open);
     canvas.into_image()
 }
 
@@ -278,6 +283,7 @@ fn draw_vertical(
     show_ox: bool,
     fret_offset: u32,
     show_notes: bool,
+    string_open: &[u8],
 ) -> ImageBuffer<Rgb<u8>, Vec<u8>> {
     let lp = LayoutParams::vertical();
     let sc = frets.len() as u32;
@@ -285,15 +291,15 @@ fn draw_vertical(
     let w = lp.left_margin + (sc - 1) * lp.string_spacing + lp.right_margin;
     let h = lp.top_margin + fc * lp.fret_spacing + lp.bottom_margin;
     let mut canvas = PngCanvas::new(w, h);
-    render_vertical(&mut canvas, frets, &lp, show_ox, fret_offset, show_notes);
+    render_vertical(&mut canvas, frets, &lp, show_ox, fret_offset, show_notes, string_open);
     canvas.into_image()
 }
 
-fn save_svg(frets: &[FretPos], show_ox: bool, vertical: bool, fret_offset: u32, show_notes: bool, path: &str) {
+fn save_svg(frets: &[FretPos], show_ox: bool, vertical: bool, fret_offset: u32, show_notes: bool, string_open: &[u8], path: &str) {
     let svg = if vertical {
-        render_svg_vertical(frets, show_ox, fret_offset, show_notes)
+        render_svg_vertical(frets, show_ox, fret_offset, show_notes, string_open)
     } else {
-        render_svg_horizontal(frets, show_ox, fret_offset, show_notes)
+        render_svg_horizontal(frets, show_ox, fret_offset, show_notes, string_open)
     };
     fs::write(path, svg).expect("SVG保存失敗");
 }
@@ -312,23 +318,26 @@ fn main() {
     let args = if is_japanese_locale() {
         let matches = Args::command()
             .about("ギターコードダイアグラム生成")
-            .mut_arg("input", |a| a.help("6桁フレット番号 または コード名 (例: 320003, x32010, C, Am, G7)"))
+            .mut_arg("input", |a| a.help("フレット番号文字列 または コード名 (例: 320003, x32010, C, Am, G7)"))
             .mut_arg("vertical", |a| a.help("縦向き表示（標準コードダイアグラム形式）"))
             .mut_arg("enable_ox_marker", |a| a.help("o/× マーカーを表示"))
             .mut_arg("fret", |a| a.help("表示開始フレット番号（デフォルト: 0）"))
             .mut_arg("output", |a| a.help("出力ファイル（拡張子で形式判定: .png .jpg .svg）"))
-            .mut_arg("caged_c", |a| a.help("CAGED C形状を使用（コード名入力時のみ有効）"))
-            .mut_arg("caged_a", |a| a.help("CAGED A形状を使用（コード名入力時のみ有効）"))
-            .mut_arg("caged_g", |a| a.help("CAGED G形状を使用（コード名入力時のみ有効）"))
-            .mut_arg("caged_e", |a| a.help("CAGED E形状を使用（コード名入力時のみ有効）"))
-            .mut_arg("caged_d", |a| a.help("CAGED D形状を使用（コード名入力時のみ有効）"))
+            .mut_arg("caged_c", |a| a.help("CAGED C形状を使用（6弦コード名入力時のみ有効）"))
+            .mut_arg("caged_a", |a| a.help("CAGED A形状を使用（6弦コード名入力時のみ有効）"))
+            .mut_arg("caged_g", |a| a.help("CAGED G形状を使用（6弦コード名入力時のみ有効）"))
+            .mut_arg("caged_e", |a| a.help("CAGED E形状を使用（6弦コード名入力時のみ有効）"))
+            .mut_arg("caged_d", |a| a.help("CAGED D形状を使用（6弦コード名入力時のみ有効）"))
             .mut_arg("show_notes", |a| a.help("押弦位置に音名を表示（ドットの代わり）"))
+            .mut_arg("strings", |a| a.help("弦数: 4（ベース）, 6（標準ギター、デフォルト）, 7（7弦ギター）"))
             .get_matches();
         Args::from_arg_matches(&matches).unwrap_or_else(|e| e.exit())
     } else {
         Args::parse()
     };
     let ja = is_japanese_locale();
+
+    let string_open = get_string_open(args.strings);
 
     let caged_shape: Option<char> = if args.caged_c { Some('C') }
         else if args.caged_a { Some('A') }
@@ -337,9 +346,17 @@ fn main() {
         else if args.caged_d { Some('D') }
         else { None };
 
-    let (frets, fret_offset) = if let Some(f) = parse_fret_string(&args.input) {
+    let (frets, fret_offset) = if let Some(f) = parse_fret_string(&args.input, args.strings as usize) {
         (f, args.fret)
     } else if let Some(chord) = parse_chord_name(&args.input) {
+        if args.strings != 6 {
+            if ja {
+                eprintln!("エラー: コード名入力は6弦ギターのみ対応しています。フレット番号文字列を使用してください (例: 0224xx)");
+            } else {
+                eprintln!("Error: Chord name input is only supported for 6-string guitar. Use a fret number string instead (e.g. 0224xx)");
+            }
+            std::process::exit(1);
+        }
         let voicing = if let Some(shape) = caged_shape {
             caged_voicing_by_shape(&chord, shape)
         } else {
@@ -358,9 +375,11 @@ fn main() {
         }
     } else {
         if ja {
-            eprintln!("エラー: 入力を解析できません。6桁フレット番号またはコード名を指定してください (例: 320003, C, Am, G7)");
+            eprintln!("エラー: 入力を解析できません。{}桁フレット番号またはコード名を指定してください (例: 320003, C, Am, G7)",
+                args.strings);
         } else {
-            eprintln!("Error: Cannot parse input. Provide a 6-digit fret number or chord name (e.g. 320003, C, Am, G7)");
+            eprintln!("Error: Cannot parse input. Provide a {}-digit fret number or chord name (e.g. 320003, C, Am, G7)",
+                args.strings);
         }
         std::process::exit(1);
     };
@@ -372,12 +391,12 @@ fn main() {
         .to_lowercase();
 
     if ext == "svg" {
-        save_svg(&frets, args.enable_ox_marker, args.vertical, fret_offset, args.show_notes, &args.output);
+        save_svg(&frets, args.enable_ox_marker, args.vertical, fret_offset, args.show_notes, string_open, &args.output);
     } else {
         let img = if args.vertical {
-            draw_vertical(&frets, args.enable_ox_marker, fret_offset, args.show_notes)
+            draw_vertical(&frets, args.enable_ox_marker, fret_offset, args.show_notes, string_open)
         } else {
-            draw_horizontal(&frets, args.enable_ox_marker, fret_offset, args.show_notes)
+            draw_horizontal(&frets, args.enable_ox_marker, fret_offset, args.show_notes, string_open)
         };
         img.save(&args.output).expect("Failed to save image");
     }
