@@ -48,6 +48,7 @@ num2tab G7 -o G7.png
 | `--output FILE` | `-o` | Output file (format detected from extension) |
 | `--vertical` | `-v` | Vertical layout (standard chord diagram orientation) |
 | `--enable-ox-marker` / `--ox` | | Show o/× open and mute markers |
+| `--notes` | `-n` | Show note names on fretted positions instead of dots |
 | `--fret N` | `-f` | Starting fret number for display |
 | `--caged-c` | `-C` | Use CAGED C shape |
 | `--caged-a` | `-A` | Use CAGED A shape |
@@ -81,6 +82,14 @@ num2tab 320003 --ox -v -o G_v.png
 
 ```bash
 num2tab x32010 --ox -o C.png    # Show ○ (open) and × (muted) markers
+```
+
+### Note Names (--notes)
+
+```bash
+num2tab G --notes -o G_notes.png      # Show G/B/D instead of dots
+num2tab Am --notes --ox -o Am_notes.png
+num2tab F --notes -o F_notes.svg      # Works with SVG too
 ```
 
 ### High Positions (--fret)
@@ -148,6 +157,10 @@ num2tab C13 --ox -o C13.png
 
 # Vertical SVG
 num2tab Am --ox -v -o Am.svg
+
+# Note names
+num2tab G --notes -o G_notes.png
+num2tab Am --notes -v -o Am_notes.svg
 ```
 
 ## Dependencies

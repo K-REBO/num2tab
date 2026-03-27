@@ -48,6 +48,7 @@ num2tab G7 -o G7.png
 | `--output FILE` | `-o` | 出力ファイル（拡張子で形式判定） |
 | `--vertical` | `-v` | 縦向き表示（標準コードダイアグラム形式） |
 | `--enable-ox-marker` / `--ox` | | o/× マーカーを表示 |
+| `--notes` | `-n` | 押弦位置のドットを音名に置き換えて表示 |
 | `--fret N` | `-f` | 表示開始フレット番号 |
 | `--caged-c` | `-C` | CAGED C 形状を使用 |
 | `--caged-a` | `-A` | CAGED A 形状を使用 |
@@ -81,6 +82,14 @@ num2tab 320003 --ox -v -o G_v.png
 
 ```bash
 num2tab x32010 --ox -o C.png    # ○（開放弦）と ×（ミュート弦）を表示
+```
+
+### 音名表示（--notes）
+
+```bash
+num2tab G --notes -o G_notes.png       # ドットの代わりに G/B/D を表示
+num2tab Am --notes --ox -o Am_notes.png
+num2tab F --notes -o F_notes.svg       # SVG にも対応
 ```
 
 ### ハイポジション（--fret）
@@ -148,6 +157,10 @@ num2tab C13 --ox -o C13.png
 
 # 縦向き SVG
 num2tab Am --ox -v -o Am.svg
+
+# 音名表示
+num2tab G --notes -o G_notes.png
+num2tab Am --notes -v -o Am_notes.svg
 ```
 
 ## 依存クレート
