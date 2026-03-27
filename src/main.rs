@@ -184,6 +184,18 @@ fn draw_dot(img: &mut ImageBuffer<Rgb<u8>, Vec<u8>>, cx: i32, cy: i32, r: i32, c
     draw_filled_circle_mut(img, (cx, cy), r, color);
 }
 
+fn fret_count(frets: &[FretPos]) -> u32 {
+    frets.iter()
+        .filter_map(|f| if let FretPos::Fret(n) = f { Some(*n as u32) } else { None })
+        .max()
+        .unwrap_or(0)
+        .max(3)
+}
+
+fn invert_string(s: usize, string_count: u32) -> u32 {
+    string_count - 1 - s as u32
+}
+
 // ==================== 横レイアウト ====================
 
 fn draw_horizontal(
@@ -192,12 +204,7 @@ fn draw_horizontal(
     fret_offset: u32,
 ) -> ImageBuffer<Rgb<u8>, Vec<u8>> {
     let string_count = frets.len() as u32;
-    let max_fret = frets
-        .iter()
-        .filter_map(|f| if let FretPos::Fret(n) = f { Some(*n as u32) } else { None })
-        .max()
-        .unwrap_or(3);
-    let fret_count = max_fret.max(3);
+    let fret_count = fret_count(frets);
 
     let string_spacing: u32 = 20;
     let fret_spacing: u32 = 36;
@@ -220,14 +227,13 @@ fn draw_horizontal(
     let y_top = top_margin as f32;
     let y_bottom = (top_margin + grid_height) as f32;
 
-    // 弦（横線）＋ o/× マーカー
     let marker_cx = (left_margin / 2) as i32;
     let marker_r = 5i32;
     for (s, fret_pos) in frets.iter().enumerate() {
-        let y = (top_margin + s as u32 * string_spacing) as f32;
-        draw_line_segment_mut(&mut img, (x_left, y), (x_right, y), black);
+        let y_px = top_margin + invert_string(s, string_count) * string_spacing;
+        draw_line_segment_mut(&mut img, (x_left, y_px as f32), (x_right, y_px as f32), black);
         if show_ox {
-            let cy = (top_margin + s as u32 * string_spacing) as i32;
+            let cy = y_px as i32;
             match fret_pos {
                 FretPos::Open => draw_open_marker(&mut img, marker_cx, cy, marker_r, black),
                 FretPos::Muted => draw_muted_marker(&mut img, marker_cx, cy, marker_r, black),
@@ -260,19 +266,15 @@ fn draw_horizontal(
     for f in 0..=fret_count {
         let x = (left_margin + f * fret_spacing) as i32;
         let n = f + fret_offset;
-        // 数字を中央揃えで描画
         let nw = if n < 10 { 5 * digit_scale as i32 } else { 12 * digit_scale as i32 };
         draw_number_right(&mut img, n, x + nw / 2, label_y, digit_scale, black);
     }
 
-    // 押弦ドット（セル中央）
     let dot_r = 7i32;
     for (s, fret_pos) in frets.iter().enumerate() {
         if let FretPos::Fret(n) = fret_pos {
-            let cx = left_margin as i32
-                + *n as i32 * fret_spacing as i32
-                - fret_spacing as i32 / 2;
-            let cy = (top_margin + s as u32 * string_spacing) as i32;
+            let cx = left_margin as i32 + *n as i32 * fret_spacing as i32 - fret_spacing as i32 / 2;
+            let cy = (top_margin + invert_string(s, string_count) * string_spacing) as i32;
             draw_dot(&mut img, cx, cy, dot_r, black);
         }
     }
@@ -288,12 +290,7 @@ fn draw_vertical(
     fret_offset: u32,
 ) -> ImageBuffer<Rgb<u8>, Vec<u8>> {
     let string_count = frets.len() as u32;
-    let max_fret = frets
-        .iter()
-        .filter_map(|f| if let FretPos::Fret(n) = f { Some(*n as u32) } else { None })
-        .max()
-        .unwrap_or(3);
-    let fret_count = max_fret.max(3);
+    let fret_count = fret_count(frets);
 
     let string_spacing: u32 = 20;
     let fret_spacing: u32 = 30;
@@ -316,14 +313,13 @@ fn draw_vertical(
     let y_top = top_margin as f32;
     let y_bottom = (top_margin + grid_height) as f32;
 
-    // 弦（縦線）＋ o/× マーカー（ナット上部）
     let marker_cy = (top_margin / 2) as i32;
     let marker_r = 5i32;
     for (s, fret_pos) in frets.iter().enumerate() {
-        let x = (left_margin + s as u32 * string_spacing) as f32;
-        draw_line_segment_mut(&mut img, (x, y_top), (x, y_bottom), black);
+        let x_px = left_margin + s as u32 * string_spacing;
+        draw_line_segment_mut(&mut img, (x_px as f32, y_top), (x_px as f32, y_bottom), black);
         if show_ox {
-            let cx = (left_margin + s as u32 * string_spacing) as i32;
+            let cx = x_px as i32;
             match fret_pos {
                 FretPos::Open => draw_open_marker(&mut img, cx, marker_cy, marker_r, black),
                 FretPos::Muted => draw_muted_marker(&mut img, cx, marker_cy, marker_r, black),
@@ -390,12 +386,7 @@ fn save_svg(frets: &[FretPos], show_ox: bool, vertical: bool, fret_offset: u32, 
 
 fn render_svg_horizontal(frets: &[FretPos], show_ox: bool, fret_offset: u32) -> String {
     let string_count = frets.len() as u32;
-    let max_fret = frets
-        .iter()
-        .filter_map(|f| if let FretPos::Fret(n) = f { Some(*n as u32) } else { None })
-        .max()
-        .unwrap_or(3);
-    let fret_count = max_fret.max(3);
+    let fret_count = fret_count(frets);
 
     let ss: u32 = 20;
     let fs: u32 = 36;
@@ -418,7 +409,7 @@ fn render_svg_horizontal(frets: &[FretPos], show_ox: bool, fret_offset: u32) -> 
     );
 
     for i in 0..string_count {
-        let y = tm + i * ss;
+        let y = tm + invert_string(i as usize, string_count) * ss;
         s += &format!(
             r#"<line x1="{lm}" y1="{y}" x2="{}" y2="{y}" stroke="black" stroke-width="1"/>
 "#,
@@ -454,7 +445,7 @@ fn render_svg_horizontal(frets: &[FretPos], show_ox: bool, fret_offset: u32) -> 
     if show_ox {
         let mx = lm / 2;
         for (i, fret_pos) in frets.iter().enumerate() {
-            let cy = tm + i as u32 * ss;
+            let cy = tm + invert_string(i, string_count) * ss;
             match fret_pos {
                 FretPos::Open => {
                     s += &format!(
@@ -480,7 +471,7 @@ fn render_svg_horizontal(frets: &[FretPos], show_ox: bool, fret_offset: u32) -> 
     for (i, fret_pos) in frets.iter().enumerate() {
         if let FretPos::Fret(n) = fret_pos {
             let cx = lm + *n as u32 * fs - fs / 2;
-            let cy = tm + i as u32 * ss;
+            let cy = tm + invert_string(i, string_count) * ss;
             s += &format!(r#"<circle cx="{cx}" cy="{cy}" r="7" fill="black"/>
 "#);
         }
@@ -492,12 +483,7 @@ fn render_svg_horizontal(frets: &[FretPos], show_ox: bool, fret_offset: u32) -> 
 
 fn render_svg_vertical(frets: &[FretPos], show_ox: bool, fret_offset: u32) -> String {
     let string_count = frets.len() as u32;
-    let max_fret = frets
-        .iter()
-        .filter_map(|f| if let FretPos::Fret(n) = f { Some(*n as u32) } else { None })
-        .max()
-        .unwrap_or(3);
-    let fret_count = max_fret.max(3);
+    let fret_count = fret_count(frets);
 
     let ss: u32 = 20;
     let fs: u32 = 30;
