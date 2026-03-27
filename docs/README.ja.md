@@ -6,7 +6,7 @@
 
 ---
 
-<video src="images/usage.mp4" controls></video>
+![usage](https://github.com/user-attachments/assets/3b5360c9-b567-4a23-b2f8-67a371f34666)
 
 | G | C `--ox` | F `--notes` | Fm7 `--vertical` |
 |---|----------|-------------|------------------|
