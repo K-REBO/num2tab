@@ -78,9 +78,8 @@ fn parse_fret_string(s: &str) -> Option<Vec<FretPos>> {
         .collect()
 }
 
-// ==================== 描画ユーティリティ ====================
+// ==================== フォント ====================
 
-// 5×7 ビットマップフォント（上位5ビット×7行）
 static DIGIT_FONT: [[u8; 7]; 10] = [
     [0b11110, 0b10010, 0b10010, 0b10010, 0b10010, 0b10010, 0b11110], // 0
     [0b00100, 0b01100, 0b00100, 0b00100, 0b00100, 0b00100, 0b01110], // 1
@@ -124,11 +123,7 @@ fn draw_digit(
                     for dx in 0..scale {
                         let px = x + (col * scale) as i32 + dx as i32;
                         let py = y + (row as u32 * scale) as i32 + dy as i32;
-                        if px >= 0
-                            && py >= 0
-                            && px < img.width() as i32
-                            && py < img.height() as i32
-                        {
+                        if px >= 0 && py >= 0 && px < img.width() as i32 && py < img.height() as i32 {
                             img.put_pixel(px as u32, py as u32, color);
                         }
                     }
@@ -138,7 +133,6 @@ fn draw_digit(
     }
 }
 
-/// 複数桁の数字を描画（右端x座標を指定）
 fn draw_number_right(
     img: &mut ImageBuffer<Rgb<u8>, Vec<u8>>,
     n: u32,
@@ -147,7 +141,7 @@ fn draw_number_right(
     scale: u32,
     color: Rgb<u8>,
 ) {
-    let dw = (5 * scale + 2) as i32; // 1桁の幅（ギャップ含む）
+    let dw = (5 * scale + 2) as i32;
     if n < 10 {
         draw_digit(img, n as u8, right_x - 5 * scale as i32, y, scale, color);
     } else {
@@ -155,43 +149,6 @@ fn draw_number_right(
         let units = (n % 10) as u8;
         draw_digit(img, units, right_x - 5 * scale as i32, y, scale, color);
         draw_digit(img, tens, right_x - dw - 5 * scale as i32, y, scale, color);
-    }
-}
-
-fn draw_open_marker(
-    img: &mut ImageBuffer<Rgb<u8>, Vec<u8>>,
-    cx: i32,
-    cy: i32,
-    r: i32,
-    color: Rgb<u8>,
-) {
-    let white = Rgb([255u8, 255u8, 255u8]);
-    draw_filled_circle_mut(img, (cx, cy), r, color);
-    draw_filled_circle_mut(img, (cx, cy), r - 2, white);
-}
-
-fn draw_muted_marker(
-    img: &mut ImageBuffer<Rgb<u8>, Vec<u8>>,
-    cx: i32,
-    cy: i32,
-    r: i32,
-    color: Rgb<u8>,
-) {
-    let d = r as f32 * 0.7;
-    for t in 0..2i32 {
-        let o = t as f32 - 0.5;
-        draw_line_segment_mut(
-            img,
-            (cx as f32 - d + o, cy as f32 - d),
-            (cx as f32 + d + o, cy as f32 + d),
-            color,
-        );
-        draw_line_segment_mut(
-            img,
-            (cx as f32 + d + o, cy as f32 - d),
-            (cx as f32 - d + o, cy as f32 + d),
-            color,
-        );
     }
 }
 
@@ -226,24 +183,8 @@ fn draw_char(
     }
 }
 
-fn draw_dot(img: &mut ImageBuffer<Rgb<u8>, Vec<u8>>, cx: i32, cy: i32, r: i32, color: Rgb<u8>) {
-    draw_filled_circle_mut(img, (cx, cy), r, color);
-}
+// ==================== 音名計算 ====================
 
-fn draw_note_label(img: &mut ImageBuffer<Rgb<u8>, Vec<u8>>, note: &str, cx: i32, cy: i32) {
-    let white = Rgb([255u8, 255u8, 255u8]);
-    let black = Rgb([0u8, 0u8, 0u8]);
-    draw_filled_circle_mut(img, (cx, cy), 8, black);
-    let n = note.len() as i32;
-    let total_w = n * 5 + (n - 1); // 5px/char + 1px gap
-    let x0 = cx - total_w / 2;
-    let y0 = cy - 3; // 7px高さを中央揃え
-    for (i, c) in note.chars().enumerate() {
-        draw_char(img, c, x0 + i as i32 * 6, y0, 1, white);
-    }
-}
-
-// 開放弦の半音値: E A D G B e (C=0)
 const STRING_OPEN: [u8; 6] = [4, 9, 2, 7, 11, 4];
 const NOTE_NAMES: [&str; 12] = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
 
@@ -264,7 +205,353 @@ fn invert_string(s: usize, string_count: u32) -> u32 {
     string_count - 1 - s as u32
 }
 
-// ==================== 横レイアウト ====================
+// ==================== レイアウトパラメータ ====================
+
+struct LayoutParams {
+    string_spacing: u32,
+    fret_spacing: u32,
+    left_margin: u32,
+    top_margin: u32,
+    bottom_margin: u32,
+    right_margin: u32,
+}
+
+impl LayoutParams {
+    fn horizontal() -> Self {
+        Self {
+            string_spacing: 20,
+            fret_spacing: 36,
+            left_margin: 28,
+            top_margin: 14,
+            bottom_margin: 26,
+            right_margin: 14,
+        }
+    }
+
+    fn vertical() -> Self {
+        Self {
+            string_spacing: 20,
+            fret_spacing: 30,
+            left_margin: 38,
+            top_margin: 28,
+            bottom_margin: 10,
+            right_margin: 10,
+        }
+    }
+}
+
+// ==================== Canvas トレイト ====================
+
+trait Canvas {
+    /// 直線を描画（width=1 通常、width=3 ナット）
+    fn draw_line(&mut self, x1: f32, y1: f32, x2: f32, y2: f32, width: u32);
+    /// 黒塗り円（押弦ドット）
+    fn draw_filled_circle(&mut self, cx: i32, cy: i32, r: i32);
+    /// 開放弦マーカー ○
+    fn draw_open_circle(&mut self, cx: i32, cy: i32, r: i32);
+    /// ミュートマーカー ×
+    fn draw_cross(&mut self, cx: i32, cy: i32, r: i32);
+    /// 音名ラベル（黒円＋白文字）
+    fn draw_note_label(&mut self, cx: i32, cy: i32, note: &str);
+    /// フレット番号（y はテキストの垂直中心）
+    /// center_align=true: x は中心座標（横向き用）
+    /// center_align=false: x は右端座標（縦向き用）
+    fn draw_number(&mut self, n: u32, x: i32, y: i32, center_align: bool);
+}
+
+// ==================== PngCanvas ====================
+
+struct PngCanvas {
+    img: ImageBuffer<Rgb<u8>, Vec<u8>>,
+}
+
+impl PngCanvas {
+    fn new(width: u32, height: u32) -> Self {
+        let white = Rgb([255u8, 255u8, 255u8]);
+        Self { img: ImageBuffer::from_pixel(width, height, white) }
+    }
+
+    fn into_image(self) -> ImageBuffer<Rgb<u8>, Vec<u8>> {
+        self.img
+    }
+}
+
+impl Canvas for PngCanvas {
+    fn draw_line(&mut self, x1: f32, y1: f32, x2: f32, y2: f32, width: u32) {
+        let black = Rgb([0u8, 0u8, 0u8]);
+        if width <= 1 {
+            draw_line_segment_mut(&mut self.img, (x1, y1), (x2, y2), black);
+        } else if y1 == y2 {
+            // 横線: y方向にオフセット
+            for d in 0..width as i32 {
+                draw_line_segment_mut(&mut self.img, (x1, y1 + d as f32), (x2, y2 + d as f32), black);
+            }
+        } else {
+            // 縦線: x方向にオフセット
+            for d in 0..width as i32 {
+                draw_line_segment_mut(&mut self.img, (x1 + d as f32, y1), (x2 + d as f32, y2), black);
+            }
+        }
+    }
+
+    fn draw_filled_circle(&mut self, cx: i32, cy: i32, r: i32) {
+        let black = Rgb([0u8, 0u8, 0u8]);
+        draw_filled_circle_mut(&mut self.img, (cx, cy), r, black);
+    }
+
+    fn draw_open_circle(&mut self, cx: i32, cy: i32, r: i32) {
+        let black = Rgb([0u8, 0u8, 0u8]);
+        let white = Rgb([255u8, 255u8, 255u8]);
+        draw_filled_circle_mut(&mut self.img, (cx, cy), r, black);
+        draw_filled_circle_mut(&mut self.img, (cx, cy), r - 2, white);
+    }
+
+    fn draw_cross(&mut self, cx: i32, cy: i32, r: i32) {
+        let black = Rgb([0u8, 0u8, 0u8]);
+        let d = r as f32 * 0.7;
+        for t in 0..2i32 {
+            let o = t as f32 - 0.5;
+            draw_line_segment_mut(
+                &mut self.img,
+                (cx as f32 - d + o, cy as f32 - d),
+                (cx as f32 + d + o, cy as f32 + d),
+                black,
+            );
+            draw_line_segment_mut(
+                &mut self.img,
+                (cx as f32 + d + o, cy as f32 - d),
+                (cx as f32 - d + o, cy as f32 + d),
+                black,
+            );
+        }
+    }
+
+    fn draw_note_label(&mut self, cx: i32, cy: i32, note: &str) {
+        let black = Rgb([0u8, 0u8, 0u8]);
+        let white = Rgb([255u8, 255u8, 255u8]);
+        draw_filled_circle_mut(&mut self.img, (cx, cy), 8, black);
+        let n = note.len() as i32;
+        let total_w = n * 5 + (n - 1);
+        let x0 = cx - total_w / 2;
+        let y0 = cy - 3;
+        for (i, c) in note.chars().enumerate() {
+            draw_char(&mut self.img, c, x0 + i as i32 * 6, y0, 1, white);
+        }
+    }
+
+    fn draw_number(&mut self, n: u32, x: i32, y: i32, center_align: bool) {
+        let black = Rgb([0u8, 0u8, 0u8]);
+        let scale = 2u32;
+        let digit_h = (7 * scale) as i32;
+        let top_y = y - digit_h / 2;
+        let right_x = if center_align {
+            let nw = if n < 10 { 5 * scale as i32 } else { 12 * scale as i32 };
+            x + nw / 2
+        } else {
+            x
+        };
+        draw_number_right(&mut self.img, n, right_x, top_y, scale, black);
+    }
+}
+
+// ==================== SvgCanvas ====================
+
+struct SvgCanvas {
+    body: String,
+    width: u32,
+    height: u32,
+}
+
+impl SvgCanvas {
+    fn new(width: u32, height: u32) -> Self {
+        Self { body: String::new(), width, height }
+    }
+
+    fn into_svg(self) -> String {
+        format!(
+            r#"<svg xmlns="http://www.w3.org/2000/svg" width="{w}" height="{h}" viewBox="0 0 {w} {h}">
+<rect width="{w}" height="{h}" fill="white"/>
+{body}</svg>"#,
+            w = self.width,
+            h = self.height,
+            body = self.body,
+        )
+    }
+}
+
+impl Canvas for SvgCanvas {
+    fn draw_line(&mut self, x1: f32, y1: f32, x2: f32, y2: f32, width: u32) {
+        self.body += &format!(
+            r#"<line x1="{x1}" y1="{y1}" x2="{x2}" y2="{y2}" stroke="black" stroke-width="{width}"/>
+"#
+        );
+    }
+
+    fn draw_filled_circle(&mut self, cx: i32, cy: i32, r: i32) {
+        self.body += &format!(r#"<circle cx="{cx}" cy="{cy}" r="{r}" fill="black"/>
+"#);
+    }
+
+    fn draw_open_circle(&mut self, cx: i32, cy: i32, r: i32) {
+        self.body += &format!(
+            r#"<circle cx="{cx}" cy="{cy}" r="{r}" fill="none" stroke="black" stroke-width="2"/>
+"#
+        );
+    }
+
+    fn draw_cross(&mut self, cx: i32, cy: i32, r: i32) {
+        let d = (r as f32 * 0.7) as i32;
+        self.body += &format!(
+            r#"<line x1="{}" y1="{}" x2="{}" y2="{}" stroke="black" stroke-width="2"/>
+<line x1="{}" y1="{}" x2="{}" y2="{}" stroke="black" stroke-width="2"/>
+"#,
+            cx - d, cy - d, cx + d, cy + d,
+            cx + d, cy - d, cx - d, cy + d,
+        );
+    }
+
+    fn draw_note_label(&mut self, cx: i32, cy: i32, note: &str) {
+        self.body += &format!(
+            r#"<circle cx="{cx}" cy="{cy}" r="8" fill="black"/>
+<text x="{cx}" y="{cy}" text-anchor="middle" dominant-baseline="middle" font-size="8" font-family="monospace" font-weight="bold" fill="white">{note}</text>
+"#
+        );
+    }
+
+    fn draw_number(&mut self, n: u32, x: i32, y: i32, center_align: bool) {
+        let anchor = if center_align { "middle" } else { "end" };
+        self.body += &format!(
+            r#"<text x="{x}" y="{y}" text-anchor="{anchor}" dominant-baseline="middle" font-size="10" font-family="monospace">{n}</text>
+"#
+        );
+    }
+}
+
+// ==================== 描画ロジック ====================
+
+fn render_horizontal<C: Canvas>(
+    canvas: &mut C,
+    frets: &[FretPos],
+    lp: &LayoutParams,
+    show_ox: bool,
+    fret_offset: u32,
+    show_notes: bool,
+) {
+    let sc = frets.len() as u32;
+    let fc = fret_count(frets);
+    let grid_height = (sc - 1) * lp.string_spacing;
+    let grid_width = fc * lp.fret_spacing;
+    let x_left = lp.left_margin as f32;
+    let x_right = (lp.left_margin + grid_width) as f32;
+    let y_top = lp.top_margin as f32;
+    let y_bottom = (lp.top_margin + grid_height) as f32;
+    let marker_cx = (lp.left_margin / 2) as i32;
+    let marker_r = 5i32;
+
+    // 弦（横線）と o/× マーカー
+    for (s, fret_pos) in frets.iter().enumerate() {
+        let y = (lp.top_margin + invert_string(s, sc) * lp.string_spacing) as f32;
+        canvas.draw_line(x_left, y, x_right, y, 1);
+        let cy = y as i32;
+        match fret_pos {
+            FretPos::Open if show_notes => canvas.draw_note_label(marker_cx, cy, string_note(s, 0, 0)),
+            FretPos::Open if show_ox => canvas.draw_open_circle(marker_cx, cy, marker_r),
+            FretPos::Muted if show_ox => canvas.draw_cross(marker_cx, cy, marker_r),
+            _ => {}
+        }
+    }
+
+    // ナット線・フレット線（縦線）
+    let nut_w = if fret_offset == 0 { 3 } else { 1 };
+    canvas.draw_line(x_left, y_top, x_left, y_bottom, nut_w);
+    for f in 1..=fc {
+        let x = (lp.left_margin + f * lp.fret_spacing) as f32;
+        canvas.draw_line(x, y_top, x, y_bottom, 1);
+    }
+
+    // フレット番号（下部、中央揃え）
+    let label_cy = (lp.top_margin + grid_height + lp.bottom_margin / 2) as i32;
+    for f in 0..=fc {
+        let x = (lp.left_margin + f * lp.fret_spacing) as i32;
+        canvas.draw_number(f + fret_offset, x, label_cy, true);
+    }
+
+    // 押弦ドット or 音名
+    for (s, fret_pos) in frets.iter().enumerate() {
+        if let FretPos::Fret(n) = fret_pos {
+            let cx = lp.left_margin as i32 + *n as i32 * lp.fret_spacing as i32 - lp.fret_spacing as i32 / 2;
+            let cy = (lp.top_margin + invert_string(s, sc) * lp.string_spacing) as i32;
+            if show_notes {
+                canvas.draw_note_label(cx, cy, string_note(s, *n, fret_offset));
+            } else {
+                canvas.draw_filled_circle(cx, cy, 7);
+            }
+        }
+    }
+}
+
+fn render_vertical<C: Canvas>(
+    canvas: &mut C,
+    frets: &[FretPos],
+    lp: &LayoutParams,
+    show_ox: bool,
+    fret_offset: u32,
+    show_notes: bool,
+) {
+    let sc = frets.len() as u32;
+    let fc = fret_count(frets);
+    let grid_width = (sc - 1) * lp.string_spacing;
+    let grid_height = fc * lp.fret_spacing;
+    let x_left = lp.left_margin as f32;
+    let x_right = (lp.left_margin + grid_width) as f32;
+    let y_top = lp.top_margin as f32;
+    let y_bottom = (lp.top_margin + grid_height) as f32;
+    let marker_cy = (lp.top_margin / 2) as i32;
+    let marker_r = 5i32;
+
+    // 弦（縦線）と o/× マーカー
+    for (s, fret_pos) in frets.iter().enumerate() {
+        let x = (lp.left_margin + s as u32 * lp.string_spacing) as f32;
+        canvas.draw_line(x, y_top, x, y_bottom, 1);
+        let cx = x as i32;
+        match fret_pos {
+            FretPos::Open if show_notes => canvas.draw_note_label(cx, marker_cy, string_note(s, 0, 0)),
+            FretPos::Open if show_ox => canvas.draw_open_circle(cx, marker_cy, marker_r),
+            FretPos::Muted if show_ox => canvas.draw_cross(cx, marker_cy, marker_r),
+            _ => {}
+        }
+    }
+
+    // ナット線・フレット線（横線）
+    let nut_w = if fret_offset == 0 { 3 } else { 1 };
+    canvas.draw_line(x_left, y_top, x_right, y_top, nut_w);
+    for f in 1..=fc {
+        let y = (lp.top_margin + f * lp.fret_spacing) as f32;
+        canvas.draw_line(x_left, y, x_right, y, 1);
+    }
+
+    // フレット番号（左側、右揃え）
+    let num_right_x = lp.left_margin as i32 - 4;
+    for f in 1..=fc {
+        let cy = (lp.top_margin + f * lp.fret_spacing - lp.fret_spacing / 2) as i32;
+        canvas.draw_number(f + fret_offset, num_right_x, cy, false);
+    }
+
+    // 押弦ドット or 音名
+    for (s, fret_pos) in frets.iter().enumerate() {
+        if let FretPos::Fret(n) = fret_pos {
+            let cx = (lp.left_margin + s as u32 * lp.string_spacing) as i32;
+            let cy = lp.top_margin as i32 + *n as i32 * lp.fret_spacing as i32 - lp.fret_spacing as i32 / 2;
+            if show_notes {
+                canvas.draw_note_label(cx, cy, string_note(s, *n, fret_offset));
+            } else {
+                canvas.draw_filled_circle(cx, cy, 7);
+            }
+        }
+    }
+}
+
+// ==================== 出力関数 ====================
 
 fn draw_horizontal(
     frets: &[FretPos],
@@ -272,91 +559,15 @@ fn draw_horizontal(
     fret_offset: u32,
     show_notes: bool,
 ) -> ImageBuffer<Rgb<u8>, Vec<u8>> {
-    let string_count = frets.len() as u32;
-    let fret_count = fret_count(frets);
-
-    let string_spacing: u32 = 20;
-    let fret_spacing: u32 = 36;
-    let left_margin: u32 = 28;
-    let top_margin: u32 = 14;
-    let bottom_margin: u32 = 26;
-    let right_margin: u32 = 14;
-
-    let grid_height = (string_count - 1) * string_spacing;
-    let grid_width = fret_count * fret_spacing;
-    let img_width = left_margin + grid_width + right_margin;
-    let img_height = top_margin + grid_height + bottom_margin;
-
-    let white = Rgb([255u8, 255u8, 255u8]);
-    let black = Rgb([0u8, 0u8, 0u8]);
-    let mut img = ImageBuffer::from_pixel(img_width, img_height, white);
-
-    let x_left = left_margin as f32;
-    let x_right = (left_margin + grid_width) as f32;
-    let y_top = top_margin as f32;
-    let y_bottom = (top_margin + grid_height) as f32;
-
-    let marker_cx = (left_margin / 2) as i32;
-    let marker_r = 5i32;
-    for (s, fret_pos) in frets.iter().enumerate() {
-        let y_px = top_margin + invert_string(s, string_count) * string_spacing;
-        draw_line_segment_mut(&mut img, (x_left, y_px as f32), (x_right, y_px as f32), black);
-        let cy = y_px as i32;
-        match fret_pos {
-            FretPos::Open if show_notes => {
-                draw_note_label(&mut img, string_note(s, 0, 0), marker_cx, cy);
-            }
-            FretPos::Open if show_ox => draw_open_marker(&mut img, marker_cx, cy, marker_r, black),
-            FretPos::Muted if show_ox => draw_muted_marker(&mut img, marker_cx, cy, marker_r, black),
-            _ => {}
-        }
-    }
-
-    // ナット / 開始フレット線
-    let nut_thickness = if fret_offset == 0 { 3 } else { 1 };
-    for dx in 0..nut_thickness as i32 {
-        draw_line_segment_mut(
-            &mut img,
-            (x_left + dx as f32, y_top),
-            (x_left + dx as f32, y_bottom),
-            black,
-        );
-    }
-
-    // フレット線（縦線）
-    for f in 1..=fret_count {
-        let x = (left_margin + f * fret_spacing) as f32;
-        draw_line_segment_mut(&mut img, (x, y_top), (x, y_bottom), black);
-    }
-
-    // フレット番号（下部、オフセット適用）
-    let digit_scale = 2u32;
-    let digit_h = 7 * digit_scale;
-    let label_y = (top_margin + grid_height + (bottom_margin - digit_h) / 2) as i32;
-    for f in 0..=fret_count {
-        let x = (left_margin + f * fret_spacing) as i32;
-        let n = f + fret_offset;
-        let nw = if n < 10 { 5 * digit_scale as i32 } else { 12 * digit_scale as i32 };
-        draw_number_right(&mut img, n, x + nw / 2, label_y, digit_scale, black);
-    }
-
-    let dot_r = 7i32;
-    for (s, fret_pos) in frets.iter().enumerate() {
-        if let FretPos::Fret(n) = fret_pos {
-            let cx = left_margin as i32 + *n as i32 * fret_spacing as i32 - fret_spacing as i32 / 2;
-            let cy = (top_margin + invert_string(s, string_count) * string_spacing) as i32;
-            if show_notes {
-                draw_note_label(&mut img, string_note(s, *n, fret_offset), cx, cy);
-            } else {
-                draw_dot(&mut img, cx, cy, dot_r, black);
-            }
-        }
-    }
-
-    img
+    let lp = LayoutParams::horizontal();
+    let sc = frets.len() as u32;
+    let fc = fret_count(frets);
+    let w = lp.left_margin + fc * lp.fret_spacing + lp.right_margin;
+    let h = lp.top_margin + (sc - 1) * lp.string_spacing + lp.bottom_margin;
+    let mut canvas = PngCanvas::new(w, h);
+    render_horizontal(&mut canvas, frets, &lp, show_ox, fret_offset, show_notes);
+    canvas.into_image()
 }
-
-// ==================== 縦レイアウト ====================
 
 fn draw_vertical(
     frets: &[FretPos],
@@ -364,94 +575,37 @@ fn draw_vertical(
     fret_offset: u32,
     show_notes: bool,
 ) -> ImageBuffer<Rgb<u8>, Vec<u8>> {
-    let string_count = frets.len() as u32;
-    let fret_count = fret_count(frets);
-
-    let string_spacing: u32 = 20;
-    let fret_spacing: u32 = 30;
-    let left_margin: u32 = 38; // フレット番号用（左側）
-    let top_margin: u32 = 28;  // o/× マーカー用
-    let right_margin: u32 = 10;
-    let bottom_margin: u32 = 10;
-
-    let grid_width = (string_count - 1) * string_spacing;
-    let grid_height = fret_count * fret_spacing;
-    let img_width = left_margin + grid_width + right_margin;
-    let img_height = top_margin + grid_height + bottom_margin;
-
-    let white = Rgb([255u8, 255u8, 255u8]);
-    let black = Rgb([0u8, 0u8, 0u8]);
-    let mut img = ImageBuffer::from_pixel(img_width, img_height, white);
-
-    let x_left = left_margin as f32;
-    let x_right = (left_margin + grid_width) as f32;
-    let y_top = top_margin as f32;
-    let y_bottom = (top_margin + grid_height) as f32;
-
-    let marker_cy = (top_margin / 2) as i32;
-    let marker_r = 5i32;
-    for (s, fret_pos) in frets.iter().enumerate() {
-        let x_px = left_margin + s as u32 * string_spacing;
-        draw_line_segment_mut(&mut img, (x_px as f32, y_top), (x_px as f32, y_bottom), black);
-        let cx = x_px as i32;
-        match fret_pos {
-            FretPos::Open if show_notes => {
-                draw_note_label(&mut img, string_note(s, 0, 0), cx, marker_cy);
-            }
-            FretPos::Open if show_ox => draw_open_marker(&mut img, cx, marker_cy, marker_r, black),
-            FretPos::Muted if show_ox => draw_muted_marker(&mut img, cx, marker_cy, marker_r, black),
-            _ => {}
-        }
-    }
-
-    // ナット / 開始フレット線
-    let nut_thickness = if fret_offset == 0 { 3 } else { 1 };
-    for dy in 0..nut_thickness as i32 {
-        draw_line_segment_mut(
-            &mut img,
-            (x_left, y_top + dy as f32),
-            (x_right, y_top + dy as f32),
-            black,
-        );
-    }
-
-    // フレット線（横線）
-    for f in 1..=fret_count {
-        let y = (top_margin + f * fret_spacing) as f32;
-        draw_line_segment_mut(&mut img, (x_left, y), (x_right, y), black);
-    }
-
-    // フレット番号（左側、オフセット適用）
-    let digit_scale = 2u32;
-    let digit_h = 7 * digit_scale;
-    let num_right_x = (left_margin - 10) as i32; // 数字の右端（ドットと重ならないよう余裕を持たせる）
-    for f in 1..=fret_count {
-        let cy = top_margin as i32
-            + f as i32 * fret_spacing as i32
-            - fret_spacing as i32 / 2
-            - digit_h as i32 / 2;
-        let n = f + fret_offset;
-        draw_number_right(&mut img, n, num_right_x, cy, digit_scale, black);
-    }
-
-    // 押弦ドット（セル中央）
-    let dot_r = 7i32;
-    for (s, fret_pos) in frets.iter().enumerate() {
-        if let FretPos::Fret(n) = fret_pos {
-            let cx = (left_margin + s as u32 * string_spacing) as i32;
-            let cy = top_margin as i32 + *n as i32 * fret_spacing as i32 - fret_spacing as i32 / 2;
-            if show_notes {
-                draw_note_label(&mut img, string_note(s, *n, fret_offset), cx, cy);
-            } else {
-                draw_dot(&mut img, cx, cy, dot_r, black);
-            }
-        }
-    }
-
-    img
+    let lp = LayoutParams::vertical();
+    let sc = frets.len() as u32;
+    let fc = fret_count(frets);
+    let w = lp.left_margin + (sc - 1) * lp.string_spacing + lp.right_margin;
+    let h = lp.top_margin + fc * lp.fret_spacing + lp.bottom_margin;
+    let mut canvas = PngCanvas::new(w, h);
+    render_vertical(&mut canvas, frets, &lp, show_ox, fret_offset, show_notes);
+    canvas.into_image()
 }
 
-// ==================== SVG 出力 ====================
+fn render_svg_horizontal(frets: &[FretPos], show_ox: bool, fret_offset: u32, show_notes: bool) -> String {
+    let lp = LayoutParams::horizontal();
+    let sc = frets.len() as u32;
+    let fc = fret_count(frets);
+    let w = lp.left_margin + fc * lp.fret_spacing + lp.right_margin;
+    let h = lp.top_margin + (sc - 1) * lp.string_spacing + lp.bottom_margin;
+    let mut canvas = SvgCanvas::new(w, h);
+    render_horizontal(&mut canvas, frets, &lp, show_ox, fret_offset, show_notes);
+    canvas.into_svg()
+}
+
+fn render_svg_vertical(frets: &[FretPos], show_ox: bool, fret_offset: u32, show_notes: bool) -> String {
+    let lp = LayoutParams::vertical();
+    let sc = frets.len() as u32;
+    let fc = fret_count(frets);
+    let w = lp.left_margin + (sc - 1) * lp.string_spacing + lp.right_margin;
+    let h = lp.top_margin + fc * lp.fret_spacing + lp.bottom_margin;
+    let mut canvas = SvgCanvas::new(w, h);
+    render_vertical(&mut canvas, frets, &lp, show_ox, fret_offset, show_notes);
+    canvas.into_svg()
+}
 
 fn save_svg(frets: &[FretPos], show_ox: bool, vertical: bool, fret_offset: u32, show_notes: bool, path: &str) {
     let svg = if vertical {
@@ -462,229 +616,11 @@ fn save_svg(frets: &[FretPos], show_ox: bool, vertical: bool, fret_offset: u32, 
     fs::write(path, svg).expect("SVG保存失敗");
 }
 
-fn render_svg_horizontal(frets: &[FretPos], show_ox: bool, fret_offset: u32, show_notes: bool) -> String {
-    let string_count = frets.len() as u32;
-    let fret_count = fret_count(frets);
-
-    let ss: u32 = 20;
-    let fs: u32 = 36;
-    let lm: u32 = 28;
-    let tm: u32 = 14;
-    let bm: u32 = 26;
-    let rm: u32 = 14;
-
-    let gh = (string_count - 1) * ss;
-    let gw = fret_count * fs;
-    let w = lm + gw + rm;
-    let h = tm + gh + bm;
-
-    let nut_w = if fret_offset == 0 { 3 } else { 1 };
-
-    let mut s = format!(
-        r#"<svg xmlns="http://www.w3.org/2000/svg" width="{w}" height="{h}" viewBox="0 0 {w} {h}">
-<rect width="{w}" height="{h}" fill="white"/>
-"#
-    );
-
-    for i in 0..string_count {
-        let y = tm + invert_string(i as usize, string_count) * ss;
-        s += &format!(
-            r#"<line x1="{lm}" y1="{y}" x2="{}" y2="{y}" stroke="black" stroke-width="1"/>
-"#,
-            lm + gw
-        );
-    }
-
-    s += &format!(
-        r#"<line x1="{lm}" y1="{tm}" x2="{lm}" y2="{}" stroke="black" stroke-width="{nut_w}"/>
-"#,
-        tm + gh
-    );
-
-    for f in 1..=fret_count {
-        let x = lm + f * fs;
-        s += &format!(
-            r#"<line x1="{x}" y1="{tm}" x2="{x}" y2="{}" stroke="black" stroke-width="1"/>
-"#,
-            tm + gh
-        );
-    }
-
-    for f in 0..=fret_count {
-        let x = lm + f * fs;
-        let n = f + fret_offset;
-        s += &format!(
-            r#"<text x="{x}" y="{}" text-anchor="middle" font-size="10" font-family="monospace">{n}</text>
-"#,
-            tm + gh + 18
-        );
-    }
-
-    let mx = lm / 2;
-    for (i, fret_pos) in frets.iter().enumerate() {
-        let cy = tm + invert_string(i, string_count) * ss;
-        match fret_pos {
-            FretPos::Open if show_notes => {
-                let note = string_note(i, 0, 0);
-                s += &format!(r#"<circle cx="{mx}" cy="{cy}" r="8" fill="black"/>
-<text x="{mx}" y="{cy}" text-anchor="middle" dominant-baseline="middle" font-size="8" font-family="monospace" font-weight="bold" fill="white">{note}</text>
-"#);
-            }
-            FretPos::Open if show_ox => {
-                s += &format!(
-                    r#"<circle cx="{mx}" cy="{cy}" r="5" fill="none" stroke="black" stroke-width="2"/>
-"#
-                );
-            }
-            FretPos::Muted if show_ox => {
-                let d = 4u32;
-                s += &format!(
-                    r#"<line x1="{}" y1="{}" x2="{}" y2="{}" stroke="black" stroke-width="2"/>
-<line x1="{}" y1="{}" x2="{}" y2="{}" stroke="black" stroke-width="2"/>
-"#,
-                    mx - d, cy - d, mx + d, cy + d,
-                    mx + d, cy - d, mx - d, cy + d
-                );
-            }
-            _ => {}
-        }
-    }
-
-    for (i, fret_pos) in frets.iter().enumerate() {
-        if let FretPos::Fret(n) = fret_pos {
-            let cx = lm + *n as u32 * fs - fs / 2;
-            let cy = tm + invert_string(i, string_count) * ss;
-            if show_notes {
-                let note = string_note(i, *n, fret_offset);
-                s += &format!(r#"<circle cx="{cx}" cy="{cy}" r="8" fill="black"/>
-<text x="{cx}" y="{cy}" text-anchor="middle" dominant-baseline="middle" font-size="8" font-family="monospace" font-weight="bold" fill="white">{note}</text>
-"#);
-            } else {
-                s += &format!(r#"<circle cx="{cx}" cy="{cy}" r="7" fill="black"/>
-"#);
-            }
-        }
-    }
-
-    s += "</svg>";
-    s
-}
-
-fn render_svg_vertical(frets: &[FretPos], show_ox: bool, fret_offset: u32, show_notes: bool) -> String {
-    let string_count = frets.len() as u32;
-    let fret_count = fret_count(frets);
-
-    let ss: u32 = 20;
-    let fs: u32 = 30;
-    let lm: u32 = 28; // フレット番号用（左側）
-    let tm: u32 = 28;
-    let rm: u32 = 10;
-    let bm: u32 = 10;
-
-    let gw = (string_count - 1) * ss;
-    let gh = fret_count * fs;
-    let w = lm + gw + rm;
-    let h = tm + gh + bm;
-
-    let nut_w = if fret_offset == 0 { 3 } else { 1 };
-
-    let mut s = format!(
-        r#"<svg xmlns="http://www.w3.org/2000/svg" width="{w}" height="{h}" viewBox="0 0 {w} {h}">
-<rect width="{w}" height="{h}" fill="white"/>
-"#
-    );
-
-    for i in 0..string_count {
-        let x = lm + i * ss;
-        s += &format!(
-            r#"<line x1="{x}" y1="{tm}" x2="{x}" y2="{}" stroke="black" stroke-width="1"/>
-"#,
-            tm + gh
-        );
-    }
-
-    s += &format!(
-        r#"<line x1="{lm}" y1="{tm}" x2="{}" y2="{tm}" stroke="black" stroke-width="{nut_w}"/>
-"#,
-        lm + gw
-    );
-
-    for f in 1..=fret_count {
-        let y = tm + f * fs;
-        s += &format!(
-            r#"<line x1="{lm}" y1="{y}" x2="{}" y2="{y}" stroke="black" stroke-width="1"/>
-"#,
-            lm + gw
-        );
-    }
-
-    // フレット番号（左側）
-    for f in 1..=fret_count {
-        let y = tm + f * fs - fs / 2;
-        let n = f + fret_offset;
-        s += &format!(
-            r#"<text x="{}" y="{y}" text-anchor="end" dominant-baseline="middle" font-size="10" font-family="monospace">{n}</text>
-"#,
-            lm - 4
-        );
-    }
-
-    let my = tm / 2;
-    for (i, fret_pos) in frets.iter().enumerate() {
-        let cx = lm + i as u32 * ss;
-        match fret_pos {
-            FretPos::Open if show_notes => {
-                let note = string_note(i, 0, 0);
-                s += &format!(r#"<circle cx="{cx}" cy="{my}" r="8" fill="black"/>
-<text x="{cx}" y="{my}" text-anchor="middle" dominant-baseline="middle" font-size="8" font-family="monospace" font-weight="bold" fill="white">{note}</text>
-"#);
-            }
-            FretPos::Open if show_ox => {
-                s += &format!(
-                    r#"<circle cx="{cx}" cy="{my}" r="5" fill="none" stroke="black" stroke-width="2"/>
-"#
-                );
-            }
-            FretPos::Muted if show_ox => {
-                let d = 4u32;
-                s += &format!(
-                    r#"<line x1="{}" y1="{}" x2="{}" y2="{}" stroke="black" stroke-width="2"/>
-<line x1="{}" y1="{}" x2="{}" y2="{}" stroke="black" stroke-width="2"/>
-"#,
-                    cx - d, my - d, cx + d, my + d,
-                    cx + d, my - d, cx - d, my + d
-                );
-            }
-            _ => {}
-        }
-    }
-
-    for (i, fret_pos) in frets.iter().enumerate() {
-        if let FretPos::Fret(n) = fret_pos {
-            let cx = lm + i as u32 * ss;
-            let cy = tm + *n as u32 * fs - fs / 2;
-            if show_notes {
-                let note = string_note(i, *n, fret_offset);
-                s += &format!(r#"<circle cx="{cx}" cy="{cy}" r="8" fill="black"/>
-<text x="{cx}" y="{cy}" text-anchor="middle" dominant-baseline="middle" font-size="8" font-family="monospace" font-weight="bold" fill="white">{note}</text>
-"#);
-            } else {
-                s += &format!(r#"<circle cx="{cx}" cy="{cy}" r="7" fill="black"/>
-"#);
-            }
-        }
-    }
-
-    s += "</svg>";
-    s
-}
-
 // ==================== main ====================
 
 fn main() {
     let args = Args::parse();
 
-    // CAGED形状フラグを解析
     let caged_shape: Option<char> = if args.caged_c { Some('C') }
         else if args.caged_a { Some('A') }
         else if args.caged_g { Some('G') }
@@ -692,12 +628,9 @@ fn main() {
         else if args.caged_d { Some('D') }
         else { None };
 
-    // 入力を解析: まず6桁形式、次にコード名
     let (frets, fret_offset) = if let Some(f) = parse_fret_string(&args.input) {
-        // 6桁モード: CAGEDフラグは無視
         (f, args.fret)
     } else if let Some(chord) = parse_chord_name(&args.input) {
-        // コード名モード
         let voicing = if let Some(shape) = caged_shape {
             caged_voicing_by_shape(&chord, shape)
         } else {

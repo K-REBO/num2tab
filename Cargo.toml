@@ -3,6 +3,12 @@ name = "num2tab"
 version = "0.1.0"
 edition = "2024"
 
+[profile.release]
+opt-level = "z"
+lto = true
+strip = true
+codegen-units = 1
+
 [dependencies]
 image = "0.25"
 imageproc = "0.25"
