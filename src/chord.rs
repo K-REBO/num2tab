@@ -102,7 +102,7 @@ struct CagedTemplate {
 const MAJOR_TEMPLATES: [CagedTemplate; 5] = [
     CagedTemplate { name: 'E', frets: [0,2,2,1,0,0],    root_semitone: 4  }, // E shape: 022100
     CagedTemplate { name: 'A', frets: [-1,0,2,2,2,0],   root_semitone: 9  }, // A shape: x02220
-    CagedTemplate { name: 'G', frets: [3,2,0,0,3,3],    root_semitone: 7  }, // G shape: 320033
+    CagedTemplate { name: 'G', frets: [3,2,0,0,0,3],    root_semitone: 7  }, // G shape: 320003
     CagedTemplate { name: 'C', frets: [-1,3,2,0,1,0],   root_semitone: 0  }, // C shape: x32010
     CagedTemplate { name: 'D', frets: [-1,-1,0,2,3,2],  root_semitone: 2  }, // D shape: xx0232
 ];
