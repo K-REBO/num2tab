@@ -1,53 +1,63 @@
 # num2tab
 
-ギターコードダイアグラム画像を生成する CLI ツールです。
+CLI tool to generate guitar chord diagram images.
 
-## インストール
+> 日本語版は [docs/README.ja.md](docs/README.ja.md) をご覧ください。
+
+---
+
+| C | Am | G | F | G7 |
+|---|----|----|---|-----|
+| ![C](docs/images/C.png) | ![Am](docs/images/Am.png) | ![G](docs/images/G.png) | ![F](docs/images/F.png) | ![G7](docs/images/G7.png) |
+
+---
+
+## Installation
 
 ```bash
 cargo install --path .
 ```
 
-または直接ビルド:
+Or build directly:
 
 ```bash
 cargo build --release
 ./target/release/num2tab --help
 ```
 
-## 使い方
+## Usage
 
-### 基本
+### Basic
 
 ```bash
-# 6桁フレット番号で入力（6弦→1弦）
-num2tab 320003 -o G.png          # G コード
-num2tab x32010 -o C.png          # C コード
-num2tab x02210 -o Am.png         # Am コード
+# 6-digit fret input (string 6 → string 1)
+num2tab 320003 -o G.png          # G chord
+num2tab x32010 -o C.png          # C chord
+num2tab x02210 -o Am.png         # Am chord
 
-# コード名で入力（CAGEDシステムで自動選択）
+# Chord name input (auto-selects voicing via CAGED system)
 num2tab C -o C.png
 num2tab Am -o Am.png
 num2tab G7 -o G7.png
 ```
 
-### オプション
+### Options
 
-| オプション | 短縮 | 説明 |
-|-----------|------|------|
-| `--output FILE` | `-o` | 出力ファイル（拡張子で形式判定） |
-| `--vertical` | `-v` | 縦向き表示（標準コードダイアグラム形式） |
-| `--enable-ox-marker` / `--ox` | | o/× マーカーを表示 |
-| `--fret N` | `-f` | 表示開始フレット番号 |
-| `--caged-c` | `-C` | CAGED C 形状を使用 |
-| `--caged-a` | `-A` | CAGED A 形状を使用 |
-| `--caged-g` | `-G` | CAGED G 形状を使用 |
-| `--caged-e` | `-E` | CAGED E 形状を使用 |
-| `--caged-d` | `-D` | CAGED D 形状を使用 |
+| Option | Short | Description |
+|--------|-------|-------------|
+| `--output FILE` | `-o` | Output file (format detected from extension) |
+| `--vertical` | `-v` | Vertical layout (standard chord diagram orientation) |
+| `--enable-ox-marker` / `--ox` | | Show o/× open and mute markers |
+| `--fret N` | `-f` | Starting fret number for display |
+| `--caged-c` | `-C` | Use CAGED C shape |
+| `--caged-a` | `-A` | Use CAGED A shape |
+| `--caged-g` | `-G` | Use CAGED G shape |
+| `--caged-e` | `-E` | Use CAGED E shape |
+| `--caged-d` | `-D` | Use CAGED D shape |
 
-### 出力形式
+### Output Formats
 
-ファイル拡張子で自動判定します。
+Detected automatically from the file extension.
 
 ```bash
 num2tab C -o C.png    # PNG
@@ -55,37 +65,39 @@ num2tab C -o C.jpg    # JPEG
 num2tab C -o C.svg    # SVG
 ```
 
-### 表示方向
+### Layout Orientation
 
 ```bash
-# 横向き（デフォルト）: 弦が横、フレットが縦
+# Horizontal (default): strings run left-right, fret divisions are vertical
 num2tab 320003 --ox -o G.png
 
-# 縦向き: 弦が縦、フレットが横
+# Vertical: strings run top-bottom, fret divisions are horizontal
 num2tab 320003 --ox -v -o G_v.png
 ```
 
-### o/× マーカー
+![Am vertical](docs/images/Am_vertical.png)
+
+### o/× Markers
 
 ```bash
-num2tab x32010 --ox -o C.png    # ○（開放弦）と ×（ミュート弦）を表示
+num2tab x32010 --ox -o C.png    # Show ○ (open) and × (muted) markers
 ```
 
-### ハイポジション（--fret）
+### High Positions (--fret)
 
 ```bash
-# 5フレット目から表示
+# Display starting from fret 5
 num2tab 133211 --ox -f 5 -o Barre_F.png
 ```
 
-## コード名入力
+## Chord Name Input
 
-アルファベットのコード名を直接入力できます。CAGEDシステムで最適な運指を自動選択します。
+You can enter chord names directly. The CAGED system is used to automatically select the optimal voicing.
 
-### 対応するコード品質
+### Supported Chord Qualities
 
-| 記法 | 種類 | 例 |
-|------|------|----|
+| Notation | Type | Examples |
+|----------|------|---------|
 | `C` | Major | C, G, F# |
 | `Cm` | Minor | Cm, Am, F#m |
 | `C7` | Dominant 7th | C7, G7, D7 |
@@ -103,54 +115,42 @@ num2tab 133211 --ox -f 5 -o Barre_F.png
 | `Cdim` | Diminished | Cdim, Bdim |
 | `Caug` | Augmented | Caug, Eaug |
 
-> **記法ルール**: `M` = Major（大文字）、`m` = minor（小文字）
+> **Notation rules**: `M` = Major (uppercase), `m` = minor (lowercase)
 
-### CAGED 形状指定
+### CAGED Shape Selection
 
-コード名入力時に `-C`/`-A`/`-G`/`-E`/`-D` で形状を指定できます（6桁入力では無効）。
+When using chord name input, specify a shape with `-C`/`-A`/`-G`/`-E`/`-D` (ignored in 6-digit mode).
 
 ```bash
-num2tab C --ox -o C_best.png    # 自動最適選択
+num2tab C --ox -o C_best.png      # Auto best selection
 num2tab C -C --ox -o C_Cshape.png
 num2tab C -A --ox -o C_Ashape.png
-num2tab C -E --ox -o C_Eshape.png   # ハイポジション
+num2tab C -E --ox -o C_Eshape.png # High position
 ```
 
-## 例
+## Examples
 
 ```bash
-# よく使うコード
+# Common chords
 num2tab C --ox -o C.png
 num2tab Am --ox -o Am.png
 num2tab G --ox -o G.png
 num2tab F --ox -o F.png
 
-# 7th コード
+# 7th chords
 num2tab G7 --ox -o G7.png
 num2tab CM7 --ox -o CM7.png
 num2tab Am7 --ox -o Am7.png
 
-# テンションコード
+# Tension chords
 num2tab C9 --ox -o C9.png
 num2tab C13 --ox -o C13.png
 
-# 縦向き SVG
+# Vertical SVG
 num2tab Am --ox -v -o Am.svg
 ```
 
-## サンプル出力
-
-### 横向き（デフォルト）
-
-| C | Am | G | F | G7 |
-|---|----|----|---|-----|
-| ![C](docs/images/C.png) | ![Am](docs/images/Am.png) | ![G](docs/images/G.png) | ![F](docs/images/F.png) | ![G7](docs/images/G7.png) |
-
-### 縦向き（`--vertical`）
-
-![Am vertical](docs/images/Am_vertical.png)
-
-## 依存クレート
+## Dependencies
 
 - [image](https://crates.io/crates/image) 0.25
 - [imageproc](https://crates.io/crates/imageproc) 0.25
