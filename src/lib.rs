@@ -12,8 +12,8 @@ pub enum FretPos {
     Fret(u8),
 }
 
-pub fn parse_fret_string(s: &str) -> Option<Vec<FretPos>> {
-    if s.len() != 6 {
+pub fn parse_fret_string(s: &str, n: usize) -> Option<Vec<FretPos>> {
+    if s.len() != n {
         return None;
     }
     s.chars()
@@ -28,11 +28,19 @@ pub fn parse_fret_string(s: &str) -> Option<Vec<FretPos>> {
 
 // ==================== 音名計算 ====================
 
-pub const STRING_OPEN: [u8; 6] = [4, 9, 2, 7, 11, 4];
 pub const NOTE_NAMES: [&str; 12] = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
 
-pub fn string_note(string_idx: usize, fret: u8, fret_offset: u32) -> &'static str {
-    let semitone = (STRING_OPEN[string_idx] as u32 + fret as u32 + fret_offset) % 12;
+/// 弦数に応じた開放弦の半音値を返す（低音弦→高音弦の順）
+pub fn get_string_open(strings: u32) -> &'static [u8] {
+    match strings {
+        4 => &[4, 9, 2, 7],            // Bass 4弦: E A D G
+        7 => &[11, 4, 9, 2, 7, 11, 4], // 7弦ギター: B E A D G B e
+        _ => &[4, 9, 2, 7, 11, 4],     // 標準6弦ギター: E A D G B e
+    }
+}
+
+pub fn string_note(string_open: &[u8], string_idx: usize, fret: u8, fret_offset: u32) -> &'static str {
+    let semitone = (string_open[string_idx] as u32 + fret as u32 + fret_offset) % 12;
     NOTE_NAMES[semitone as usize]
 }
 
@@ -176,6 +184,7 @@ pub fn render_horizontal<C: Canvas>(
     show_ox: bool,
     fret_offset: u32,
     show_notes: bool,
+    string_open: &[u8],
 ) {
     let sc = frets.len() as u32;
     let fc = fret_count(frets);
@@ -193,7 +202,7 @@ pub fn render_horizontal<C: Canvas>(
         canvas.draw_line(x_left, y, x_right, y, 1);
         let cy = y as i32;
         match fret_pos {
-            FretPos::Open if show_notes => canvas.draw_note_label(marker_cx, cy, string_note(s, 0, 0)),
+            FretPos::Open if show_notes => canvas.draw_note_label(marker_cx, cy, string_note(string_open, s, 0, 0)),
             FretPos::Open if show_ox => canvas.draw_open_circle(marker_cx, cy, marker_r),
             FretPos::Muted if show_ox => canvas.draw_cross(marker_cx, cy, marker_r),
             _ => {}
@@ -218,7 +227,7 @@ pub fn render_horizontal<C: Canvas>(
             let cx = lp.left_margin as i32 + *n as i32 * lp.fret_spacing as i32 - lp.fret_spacing as i32 / 2;
             let cy = (lp.top_margin + invert_string(s, sc) * lp.string_spacing) as i32;
             if show_notes {
-                canvas.draw_note_label(cx, cy, string_note(s, *n, fret_offset));
+                canvas.draw_note_label(cx, cy, string_note(string_open, s, *n, fret_offset));
             } else {
                 canvas.draw_filled_circle(cx, cy, 7);
             }
@@ -233,6 +242,7 @@ pub fn render_vertical<C: Canvas>(
     show_ox: bool,
     fret_offset: u32,
     show_notes: bool,
+    string_open: &[u8],
 ) {
     let sc = frets.len() as u32;
     let fc = fret_count(frets);
@@ -250,7 +260,7 @@ pub fn render_vertical<C: Canvas>(
         canvas.draw_line(x, y_top, x, y_bottom, 1);
         let cx = x as i32;
         match fret_pos {
-            FretPos::Open if show_notes => canvas.draw_note_label(cx, marker_cy, string_note(s, 0, 0)),
+            FretPos::Open if show_notes => canvas.draw_note_label(cx, marker_cy, string_note(string_open, s, 0, 0)),
             FretPos::Open if show_ox => canvas.draw_open_circle(cx, marker_cy, marker_r),
             FretPos::Muted if show_ox => canvas.draw_cross(cx, marker_cy, marker_r),
             _ => {}
@@ -275,7 +285,7 @@ pub fn render_vertical<C: Canvas>(
             let cx = (lp.left_margin + s as u32 * lp.string_spacing) as i32;
             let cy = lp.top_margin as i32 + *n as i32 * lp.fret_spacing as i32 - lp.fret_spacing as i32 / 2;
             if show_notes {
-                canvas.draw_note_label(cx, cy, string_note(s, *n, fret_offset));
+                canvas.draw_note_label(cx, cy, string_note(string_open, s, *n, fret_offset));
             } else {
                 canvas.draw_filled_circle(cx, cy, 7);
             }
@@ -285,25 +295,25 @@ pub fn render_vertical<C: Canvas>(
 
 // ==================== SVG出力 ====================
 
-pub fn render_svg_horizontal(frets: &[FretPos], show_ox: bool, fret_offset: u32, show_notes: bool) -> String {
+pub fn render_svg_horizontal(frets: &[FretPos], show_ox: bool, fret_offset: u32, show_notes: bool, string_open: &[u8]) -> String {
     let lp = LayoutParams::horizontal();
     let sc = frets.len() as u32;
     let fc = fret_count(frets);
     let w = lp.left_margin + fc * lp.fret_spacing + lp.right_margin;
     let h = lp.top_margin + (sc - 1) * lp.string_spacing + lp.bottom_margin;
     let mut canvas = SvgCanvas::new(w, h);
-    render_horizontal(&mut canvas, frets, &lp, show_ox, fret_offset, show_notes);
+    render_horizontal(&mut canvas, frets, &lp, show_ox, fret_offset, show_notes, string_open);
     canvas.into_svg()
 }
 
-pub fn render_svg_vertical(frets: &[FretPos], show_ox: bool, fret_offset: u32, show_notes: bool) -> String {
+pub fn render_svg_vertical(frets: &[FretPos], show_ox: bool, fret_offset: u32, show_notes: bool, string_open: &[u8]) -> String {
     let lp = LayoutParams::vertical();
     let sc = frets.len() as u32;
     let fc = fret_count(frets);
     let w = lp.left_margin + (sc - 1) * lp.string_spacing + lp.right_margin;
     let h = lp.top_margin + fc * lp.fret_spacing + lp.bottom_margin;
     let mut canvas = SvgCanvas::new(w, h);
-    render_vertical(&mut canvas, frets, &lp, show_ox, fret_offset, show_notes);
+    render_vertical(&mut canvas, frets, &lp, show_ox, fret_offset, show_notes, string_open);
     canvas.into_svg()
 }
 
@@ -319,8 +329,9 @@ pub fn chord_to_svg(
     show_notes: bool,
 ) -> String {
     use chord::{best_caged_voicing, parse_chord_name};
+    let string_open = get_string_open(6);
 
-    let frets = if let Some(f) = parse_fret_string(input) {
+    let frets = if let Some(f) = parse_fret_string(input, 6) {
         f
     } else if let Some(chord_name) = parse_chord_name(input) {
         match best_caged_voicing(&chord_name) {
@@ -332,8 +343,8 @@ pub fn chord_to_svg(
     };
 
     if vertical {
-        render_svg_vertical(&frets, show_ox, fret_offset, show_notes)
+        render_svg_vertical(&frets, show_ox, fret_offset, show_notes, string_open)
     } else {
-        render_svg_horizontal(&frets, show_ox, fret_offset, show_notes)
+        render_svg_horizontal(&frets, show_ox, fret_offset, show_notes, string_open)
     }
 }
