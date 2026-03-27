@@ -28,6 +28,7 @@
             packages = [
               rustToolchain
               pkgs.wasm-pack
+              pkgs.binaryen  # provides wasm-opt for wasm-pack optimization
             ];
             shellHook = ''
               echo "num2tab WASM build environment"

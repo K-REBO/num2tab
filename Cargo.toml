@@ -16,6 +16,9 @@ codegen-units = 1
 [features]
 wasm = ["dep:wasm-bindgen"]
 
+[package.metadata.wasm-pack.profile.release]
+wasm-opt = false
+
 [dependencies]
 image = "0.25"
 imageproc = "0.25"
