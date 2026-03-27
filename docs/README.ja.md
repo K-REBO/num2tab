@@ -6,7 +6,7 @@
 
 ---
 
-![usage](https://github.com/user-attachments/assets/3b5360c9-b567-4a23-b2f8-67a371f34666)
+![usage](https://github.com/user-attachments/assets/b14ac5a3-3563-4f53-a29d-291caab007db)
 
 | G | C `--ox` | F `--notes` | Fm7 `--vertical` |
 |---|----------|-------------|------------------|
