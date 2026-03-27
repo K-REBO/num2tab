@@ -618,7 +618,7 @@ fn main() {
             best_caged_voicing(&chord)
         };
         match voicing {
-            Some((f, fo)) => (f, fo),
+            Some((f, fo)) => (f, if args.fret > 0 { args.fret } else { fo }),
             None => {
                 eprintln!("エラー: '{}' のボイシングが見つかりませんでした", args.input);
                 std::process::exit(1);
