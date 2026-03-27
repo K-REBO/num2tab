@@ -6,9 +6,9 @@ CLI tool to generate guitar chord diagram images.
 
 ---
 
-| C | Am | G | F | G7 |
-|---|----|----|---|-----|
-| ![C](docs/images/C.png) | ![Am](docs/images/Am.png) | ![G](docs/images/G.png) | ![F](docs/images/F.png) | ![G7](docs/images/G7.png) |
+| G | C `--ox` | F `--notes` | Fm7 `--vertical` |
+|---|----------|-------------|------------------|
+| ![G](docs/images/G.png) | ![C](docs/images/C_ox.png) | ![F notes](docs/images/F_notes.png) | ![Fm7 vertical](docs/images/Fm7_vertical.png) |
 
 ---
 
@@ -66,38 +66,56 @@ num2tab C -o C.jpg    # JPEG
 num2tab C -o C.svg    # SVG
 ```
 
-### Layout Orientation
+### `--vertical` / `-v`
 
 ```bash
-# Horizontal (default): strings run left-right, fret divisions are vertical
-num2tab 320003 --ox -o G.png
-
-# Vertical: strings run top-bottom, fret divisions are horizontal
-num2tab 320003 --ox -v -o G_v.png
+num2tab Am --ox -v -o Am_v.png
 ```
 
-![Am vertical](docs/images/Am_vertical.png)
+![vertical](docs/images/option_vertical.png)
 
-### o/× Markers
+### `--enable-ox-marker` / `--ox`
+
+Show ○ (open string) and × (muted string) markers.
 
 ```bash
-num2tab x32010 --ox -o C.png    # Show ○ (open) and × (muted) markers
+num2tab G --ox -o G.png
 ```
 
-### Note Names (--notes)
+![ox marker](docs/images/option_ox.png)
+
+### `--notes` / `-n`
+
+Show note names (C, D#, F# …) instead of dots at fretted and open positions.
 
 ```bash
-num2tab G --notes -o G_notes.png      # Show G/B/D instead of dots
-num2tab Am --notes --ox -o Am_notes.png
-num2tab F --notes -o F_notes.svg      # Works with SVG too
+num2tab G --notes --ox -o G_notes.png
 ```
 
-### High Positions (--fret)
+![notes](docs/images/option_notes.png)
+
+### `--fret N` / `-f`
+
+Set the starting fret number for high-position chords.
 
 ```bash
-# Display starting from fret 5
 num2tab 133211 --ox -f 5 -o Barre_F.png
 ```
+
+![fret offset](docs/images/option_fret.png)
+
+### CAGED Shape Selection (`-C` / `-A` / `-G` / `-E` / `-D`)
+
+When using chord name input, specify a CAGED shape to choose the voicing.
+
+```bash
+num2tab C -C --ox -o C_Cshape.png   # C shape (open position)
+num2tab C -E --ox -o C_Eshape.png   # E shape (high position)
+```
+
+| C shape | E shape |
+|---------|---------|
+| ![C shape](docs/images/option_caged_C.png) | ![E shape](docs/images/option_caged_E.png) |
 
 ## Chord Name Input
 
@@ -125,17 +143,6 @@ You can enter chord names directly. The CAGED system is used to automatically se
 | `Caug` | Augmented | Caug, Eaug |
 
 > **Notation rules**: `M` = Major (uppercase), `m` = minor (lowercase)
-
-### CAGED Shape Selection
-
-When using chord name input, specify a shape with `-C`/`-A`/`-G`/`-E`/`-D` (ignored in 6-digit mode).
-
-```bash
-num2tab C --ox -o C_best.png      # Auto best selection
-num2tab C -C --ox -o C_Cshape.png
-num2tab C -A --ox -o C_Ashape.png
-num2tab C -E --ox -o C_Eshape.png # High position
-```
 
 ## Examples
 
