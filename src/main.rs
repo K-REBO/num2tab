@@ -29,8 +29,9 @@ struct Args {
     fret: u32,
 
     /// Output file (format determined by extension: .png .jpg .svg)
-    #[arg(short, long, default_value = "out.png")]
-    output: String,
+    /// Defaults to <input>.png (e.g. G -> G.png, 320003 -> 320003.png)
+    #[arg(short, long)]
+    output: Option<String>,
 
     /// Use CAGED C shape (only valid with chord name input on 6-string)
     #[arg(short = 'C', long = "caged-c")]
@@ -306,6 +307,13 @@ fn save_svg(frets: &[FretPos], show_ox: bool, vertical: bool, fret_offset: u32, 
 
 // ==================== main ====================
 
+fn auto_output_name(input: &str) -> String {
+    let safe: String = input.chars().map(|c| {
+        if matches!(c, '/' | '\\' | ':' | '*' | '?' | '"' | '<' | '>' | '|') { '_' } else { c }
+    }).collect();
+    format!("{}.png", safe)
+}
+
 fn is_japanese_locale() -> bool {
     std::env::var("LANG")
         .or_else(|_| std::env::var("LC_ALL"))
@@ -322,7 +330,7 @@ fn main() {
             .mut_arg("vertical", |a| a.help("縦向き表示（標準コードダイアグラム形式）"))
             .mut_arg("enable_ox_marker", |a| a.help("o/× マーカーを表示"))
             .mut_arg("fret", |a| a.help("表示開始フレット番号（デフォルト: 0）"))
-            .mut_arg("output", |a| a.help("出力ファイル（拡張子で形式判定: .png .jpg .svg）"))
+            .mut_arg("output", |a| a.help("出力ファイル（省略時は入力名.png、拡張子で形式判定: .png .jpg .svg）"))
             .mut_arg("caged_c", |a| a.help("CAGED C形状を使用（6弦コード名入力時のみ有効）"))
             .mut_arg("caged_a", |a| a.help("CAGED A形状を使用（6弦コード名入力時のみ有効）"))
             .mut_arg("caged_g", |a| a.help("CAGED G形状を使用（6弦コード名入力時のみ有効）"))
@@ -337,6 +345,7 @@ fn main() {
     };
     let ja = is_japanese_locale();
 
+    let output = args.output.unwrap_or_else(|| auto_output_name(&args.input));
     let string_open = get_string_open(args.strings);
 
     let caged_shape: Option<char> = if args.caged_c { Some('C') }
@@ -384,26 +393,26 @@ fn main() {
         std::process::exit(1);
     };
 
-    let ext = std::path::Path::new(&args.output)
+    let ext = std::path::Path::new(&output)
         .extension()
         .and_then(|e| e.to_str())
         .unwrap_or("png")
         .to_lowercase();
 
     if ext == "svg" {
-        save_svg(&frets, args.enable_ox_marker, args.vertical, fret_offset, args.show_notes, string_open, &args.output);
+        save_svg(&frets, args.enable_ox_marker, args.vertical, fret_offset, args.show_notes, string_open, &output);
     } else {
         let img = if args.vertical {
             draw_vertical(&frets, args.enable_ox_marker, fret_offset, args.show_notes, string_open)
         } else {
             draw_horizontal(&frets, args.enable_ox_marker, fret_offset, args.show_notes, string_open)
         };
-        img.save(&args.output).expect("Failed to save image");
+        img.save(&output).expect("Failed to save image");
     }
 
     if ja {
-        println!("{} を生成しました", args.output);
+        println!("{} を生成しました", output);
     } else {
-        println!("Generated {}", args.output);
+        println!("Generated {}", output);
     }
 }
