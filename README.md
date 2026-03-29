@@ -70,6 +70,17 @@ num2tab C -o C.jpg    # JPEG
 num2tab C -o C.svg    # SVG
 ```
 
+### Auto-naming
+
+When `--output` is omitted, the output filename is derived from the input: `<input>.png`.
+Characters that are invalid in filenames (`/ \ : * ? " < > |`) are replaced with `_`.
+
+```bash
+num2tab G           # → G.png
+num2tab Am7         # → Am7.png
+num2tab 320003      # → 320003.png
+```
+
 ### `--vertical` / `-v`
 
 ```bash

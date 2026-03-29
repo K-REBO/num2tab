@@ -70,6 +70,17 @@ num2tab C -o C.jpg    # JPEG
 num2tab C -o C.svg    # SVG
 ```
 
+### 自動命名
+
+`--output` を省略すると、入力値からファイル名が自動決定されます: `<入力値>.png`。
+ファイル名に使えない文字（`/ \ : * ? " < > |`）は `_` に置換されます。
+
+```bash
+num2tab G           # → G.png
+num2tab Am7         # → Am7.png
+num2tab 320003      # → 320003.png
+```
+
 ### `--vertical` / `-v`
 
 ```bash
