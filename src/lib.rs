@@ -5,7 +5,7 @@ use wasm_bindgen::prelude::*;
 
 // ==================== データ型 ====================
 
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum FretPos {
     Open,
     Muted,
