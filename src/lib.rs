@@ -39,6 +39,33 @@ pub fn get_string_open(strings: u32) -> &'static [u8] {
     }
 }
 
+/// チューニング文字列をパースして開放弦の半音値リストを返す
+/// 例: "EADGBE", "DADGBbE", "C#ADGBE"
+/// 音名は大文字/小文字どちらも可（e=E）、# または b で半音変化
+pub fn parse_tuning(s: &str) -> Option<Vec<u8>> {
+    let mut notes = Vec::new();
+    let mut chars = s.chars().peekable();
+    while let Some(c) = chars.next() {
+        let base: u8 = match c.to_ascii_uppercase() {
+            'C' => 0,
+            'D' => 2,
+            'E' => 4,
+            'F' => 5,
+            'G' => 7,
+            'A' => 9,
+            'B' => 11,
+            _ => return None,
+        };
+        let semitone = match chars.peek() {
+            Some('#') => { chars.next(); (base + 1) % 12 }
+            Some('b') => { chars.next(); (base + 11) % 12 }
+            _ => base,
+        };
+        notes.push(semitone);
+    }
+    if notes.len() >= 2 { Some(notes) } else { None }
+}
+
 pub fn string_note(string_open: &[u8], string_idx: usize, fret: u8, fret_offset: u32) -> &'static str {
     let semitone = (string_open[string_idx] as u32 + fret as u32 + fret_offset) % 12;
     NOTE_NAMES[semitone as usize]
