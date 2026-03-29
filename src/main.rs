@@ -1,4 +1,4 @@
-use num2tab::chord::{best_caged_voicing, caged_voicing_by_shape, parse_chord_name};
+use num2tab::chord::{best_caged_voicing, best_voicing_for_tuning, caged_voicing_by_shape, parse_chord_name};
 use num2tab::{
     fret_count, get_string_open, parse_fret_string, render_horizontal, render_vertical,
     render_svg_horizontal, render_svg_vertical, Canvas, FretPos, LayoutParams,
@@ -358,18 +358,22 @@ fn main() {
     let (frets, fret_offset) = if let Some(f) = parse_fret_string(&args.input, args.strings as usize) {
         (f, args.fret)
     } else if let Some(chord) = parse_chord_name(&args.input) {
-        if args.strings != 6 {
-            if ja {
-                eprintln!("エラー: コード名入力は6弦ギターのみ対応しています。フレット番号文字列を使用してください (例: 0224xx)");
+        let is_standard = args.strings == 6;
+        let voicing = if is_standard {
+            if let Some(shape) = caged_shape {
+                caged_voicing_by_shape(&chord, shape)
             } else {
-                eprintln!("Error: Chord name input is only supported for 6-string guitar. Use a fret number string instead (e.g. 0224xx)");
+                best_caged_voicing(&chord)
             }
-            std::process::exit(1);
-        }
-        let voicing = if let Some(shape) = caged_shape {
-            caged_voicing_by_shape(&chord, shape)
         } else {
-            best_caged_voicing(&chord)
+            if caged_shape.is_some() {
+                if ja {
+                    eprintln!("警告: CAGED形状指定は標準6弦チューニングのみ有効です。最良ボイシングを使用します。");
+                } else {
+                    eprintln!("Warning: CAGED shape selection is only valid for standard 6-string tuning. Using best voicing.");
+                }
+            }
+            best_voicing_for_tuning(&chord, string_open)
         };
         match voicing {
             Some((f, fo)) => (f, if args.fret > 0 { args.fret } else { fo }),

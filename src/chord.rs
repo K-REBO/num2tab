@@ -359,6 +359,99 @@ pub fn playability_score(frets: &[FretPos]) -> i32 {
         - neck_penalty
 }
 
+// ==================== 任意チューニング対応ボイシング探索 ====================
+
+/// 任意チューニングの1弦分の候補を返す（string_candidatesの汎用版）
+fn string_candidates_tuned(
+    string_open: &[u8],
+    string_idx: usize,
+    win_min: u8,
+    win_max: u8,
+    all_tones: &[u8],
+) -> Vec<(FretPos, u8)> {
+    let mut result = Vec::new();
+    let open_note = string_open[string_idx];
+
+    if win_min == 0 && all_tones.contains(&open_note) {
+        result.push((FretPos::Open, open_note));
+    }
+    for fret in win_min.max(1)..=win_max {
+        let note = (open_note as u16 + fret as u16) as u8 % 12;
+        if all_tones.contains(&note) {
+            result.push((FretPos::Fret(fret), note));
+        }
+    }
+    result.push((FretPos::Muted, 255));
+    result
+}
+
+/// 弦数を引数で受け取る enumerate_voicings
+fn enumerate_voicings_n(
+    per_string: &[Vec<(FretPos, u8)>],
+    string_idx: usize,
+    combo: &mut Vec<(FretPos, u8)>,
+    mandatory: &[u8],
+    results: &mut Vec<(Vec<FretPos>, u32)>,
+    n_strings: usize,
+) {
+    if string_idx == n_strings {
+        let notes: Vec<u8> = combo.iter()
+            .filter(|(_, n)| *n != 255)
+            .map(|(_, n)| *n)
+            .collect();
+        if mandatory.iter().all(|m| notes.contains(m)) {
+            let frets: Vec<FretPos> = combo.iter().map(|(f, _)| *f).collect();
+            let fret_offset = calc_fret_offset(&frets);
+            let normalized = normalize_frets(&frets, fret_offset);
+            results.push((normalized, fret_offset));
+        }
+        return;
+    }
+    for candidate in &per_string[string_idx] {
+        combo.push(*candidate);
+        enumerate_voicings_n(per_string, string_idx + 1, combo, mandatory, results, n_strings);
+        combo.pop();
+    }
+}
+
+/// 任意のチューニング・弦数でボイシングを全弦探索して返す
+pub fn generate_voicings_for_tuning(
+    chord: &ChordName,
+    string_open: &[u8],
+) -> Vec<(Vec<FretPos>, u32)> {
+    let (mandatory, optional) = chord_tone_sets(chord.root, chord.quality);
+    let all_tones: Vec<u8> = mandatory.iter().chain(optional.iter()).copied().collect();
+    let n_strings = string_open.len();
+    let mut results = Vec::new();
+
+    for win_start in 0u8..=9 {
+        let win_end = win_start + 4;
+        let per_string: Vec<Vec<(FretPos, u8)>> = (0..n_strings)
+            .map(|s| string_candidates_tuned(string_open, s, win_start, win_end, &all_tones))
+            .collect();
+        let mut combo = Vec::with_capacity(n_strings);
+        enumerate_voicings_n(&per_string, 0, &mut combo, &mandatory, &mut results, n_strings);
+    }
+
+    results
+}
+
+/// 任意のチューニング・弦数で最良ボイシングを返す
+/// 標準6弦チューニングの場合はCAGEDテンプレートを優先使用
+pub fn best_voicing_for_tuning(
+    chord: &ChordName,
+    string_open: &[u8],
+) -> Option<(Vec<FretPos>, u32)> {
+    // 標準6弦チューニングならCAGEDを使う
+    if string_open == [4u8, 9, 2, 7, 11, 4] {
+        return best_caged_voicing(chord);
+    }
+
+    generate_voicings_for_tuning(chord, string_open)
+        .into_iter()
+        .max_by_key(|(frets, fo)| playability_score(frets) - *fo as i32 * 3)
+}
+
 // ==================== パブリックAPI ====================
 
 /// コード名から最良ボイシング（スコア最高）を返す
