@@ -8,9 +8,9 @@
 
 ![usage](https://github.com/user-attachments/assets/b14ac5a3-3563-4f53-a29d-291caab007db)
 
-| G | C `--ox` | F `--notes` | Fm7 `--vertical` |
-|---|----------|-------------|------------------|
-| ![G](images/G.png) | ![C](images/C_ox.png) | ![F notes](images/F_notes.png) | ![Fm7 vertical](images/Fm7_vertical.png) |
+| G | C `--ox` | F `--notes` | Fm7 `--vertical` | A9 `--tuning "DAEAC#E" --notes` | Am7 `--strings 4 --notes` |
+|---|----------|-------------|------------------|----------------------------------|---------------------------|
+| ![G](images/G.png) | ![C](images/C_ox.png) | ![F notes](images/F_notes.png) | ![Fm7 vertical](images/Fm7_vertical.png) | ![tuning A9](images/tuning_A9.png) | ![strings 4 Am7](images/strings4_Am7.png) |
 
 ---
 
@@ -57,6 +57,8 @@ num2tab G7 -o G7.png
 | `--caged-g` | `-G` | CAGED G 形状を使用 |
 | `--caged-e` | `-E` | CAGED E 形状を使用 |
 | `--caged-d` | `-D` | CAGED D 形状を使用 |
+| `--tuning NOTES` | | 代替／カスタムチューニング（例: `DAEAC#E`） |
+| `--strings N` | | 弦の本数（デフォルト: 6） |
 
 ### 出力形式
 
@@ -105,6 +107,26 @@ num2tab 133211 --ox -f 5 -o Barre_F.png
 ```
 
 ![fret offset](images/option_fret.png)
+
+### `--tuning NOTES`
+
+代替チューニングやカスタムチューニングを指定します。最低弦から開放弦の音名を並べて指定します（例: オープンAチューニング `DAEAC#E`）。
+
+```bash
+num2tab --tuning "DAEAC#E" A9 --notes -o tuning_A9.png
+```
+
+![tuning](images/tuning_A9.png)
+
+### `--strings N`
+
+弦の本数を指定します（デフォルト: 6）。ベースギターなどに使用できます。
+
+```bash
+num2tab --strings 4 Am7 --notes -o strings4_Am7.png
+```
+
+![strings 4](images/strings4_Am7.png)
 
 ### CAGED 形状指定（`-C` / `-A` / `-G` / `-E` / `-D`）
 
