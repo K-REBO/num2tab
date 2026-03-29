@@ -1,4 +1,4 @@
-use num2tab::chord::{best_caged_voicing, caged_voicing_by_shape, parse_chord_name};
+use num2tab::chord::{best_voicing_for_tuning, caged_voicing_by_shape, parse_chord_name};
 use num2tab::{
     fret_count, get_string_open, parse_fret_string, parse_tuning,
     render_horizontal, render_vertical,
@@ -64,7 +64,7 @@ struct Args {
     strings: u32,
 
     /// Custom tuning as note names low to high (e.g. EADGBE, DADGBbE, DADGAD)
-    /// Overrides --strings. Chord name input requires standard tuning (EADGBE).
+    /// Overrides --strings.
     #[arg(long = "tuning")]
     tuning: Option<String>,
 }
@@ -387,17 +387,18 @@ fn main() {
     let (frets, fret_offset) = if let Some(f) = parse_fret_string(&args.input, string_count) {
         (f, args.fret)
     } else if let Some(chord) = parse_chord_name(&args.input) {
-        let voicing = if !is_standard_tuning {
-            if ja {
-                eprintln!("エラー: コード名入力は標準チューニング (EADGBE) のみ対応しています。フレット番号文字列を使用してください");
-            } else {
-                eprintln!("Error: Chord name input requires standard tuning (EADGBE). Use a fret number string instead.");
+        let voicing = if let Some(shape) = caged_shape {
+            if !is_standard_tuning {
+                if ja {
+                    eprintln!("エラー: --caged-* オプションは標準チューニング (EADGBE) が必要です");
+                } else {
+                    eprintln!("Error: --caged-* options require standard tuning (EADGBE)");
+                }
+                std::process::exit(1);
             }
-            std::process::exit(1);
-        } else if let Some(shape) = caged_shape {
             caged_voicing_by_shape(&chord, shape)
         } else {
-            best_caged_voicing(&chord)
+            best_voicing_for_tuning(&chord, string_open)
         };
         match voicing {
             Some((f, fo)) => (f, if args.fret > 0 { args.fret } else { fo }),

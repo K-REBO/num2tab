@@ -8,9 +8,9 @@ CLI tool to generate guitar chord diagram images.
 
 ![usage](https://github.com/user-attachments/assets/b14ac5a3-3563-4f53-a29d-291caab007db)
 
-| G | C `--ox` | F `--notes` | Fm7 `--vertical` |
-|---|----------|-------------|------------------|
-| ![G](docs/images/G.png) | ![C](docs/images/C_ox.png) | ![F notes](docs/images/F_notes.png) | ![Fm7 vertical](docs/images/Fm7_vertical.png) |
+| G | C `--ox` | F `--notes` | Fm7 `--vertical` | A9 `--tuning "DAEAC#E" --notes` | Am7 `--strings 4 --notes` |
+|---|----------|-------------|------------------|----------------------------------|---------------------------|
+| ![G](docs/images/G.png) | ![C](docs/images/C_ox.png) | ![F notes](docs/images/F_notes.png) | ![Fm7 vertical](docs/images/Fm7_vertical.png) | ![tuning A9](docs/images/tuning_A9.png) | ![strings 4 Am7](docs/images/strings4_Am7.png) |
 
 ---
 
@@ -57,6 +57,8 @@ num2tab G7 -o G7.png
 | `--caged-g` | `-G` | Use CAGED G shape |
 | `--caged-e` | `-E` | Use CAGED E shape |
 | `--caged-d` | `-D` | Use CAGED D shape |
+| `--tuning NOTES` | | Alternate/custom tuning (e.g. `DAEAC#E`) |
+| `--strings N` | | Number of strings (default: 6) |
 
 ### Output Formats
 
@@ -66,6 +68,17 @@ Detected automatically from the file extension.
 num2tab C -o C.png    # PNG
 num2tab C -o C.jpg    # JPEG
 num2tab C -o C.svg    # SVG
+```
+
+### Auto-naming
+
+When `--output` is omitted, the output filename is derived from the input: `<input>.png`.
+Characters that are invalid in filenames (`/ \ : * ? " < > |`) are replaced with `_`.
+
+```bash
+num2tab G           # → G.png
+num2tab Am7         # → Am7.png
+num2tab 320003      # → 320003.png
 ```
 
 ### `--vertical` / `-v`
@@ -105,6 +118,26 @@ num2tab 133211 --ox -f 5 -o Barre_F.png
 ```
 
 ![fret offset](docs/images/option_fret.png)
+
+### `--tuning NOTES`
+
+Use an alternate or custom tuning. Specify the open-string notes from the lowest string (e.g. `DAEAC#E` for open A tuning).
+
+```bash
+num2tab --tuning "DAEAC#E" A9 --notes -o tuning_A9.png
+```
+
+![tuning](docs/images/tuning_A9.png)
+
+### `--strings N`
+
+Set the number of strings (default: 6). Useful for bass guitar or other instruments.
+
+```bash
+num2tab --strings 4 Am7 --notes -o strings4_Am7.png
+```
+
+![strings 4](docs/images/strings4_Am7.png)
 
 ### CAGED Shape Selection (`-C` / `-A` / `-G` / `-E` / `-D`)
 

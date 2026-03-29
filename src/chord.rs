@@ -1,4 +1,5 @@
 use crate::FretPos;
+use std::collections::HashSet;
 
 // ==================== 弦の開放音（半音値: C=0）====================
 // 6弦(低E)→1弦(高e): E A D G B e
@@ -259,6 +260,10 @@ pub fn generate_tension_voicings(chord: &ChordName) -> Vec<(Vec<FretPos>, u32)> 
         enumerate_voicings(&per_string, 0, &mut combo, &mandatory, &mut results);
     }
 
+    // ウィンドウ重複で生成された同一ボイシングを除去
+    let mut seen = HashSet::new();
+    results.retain(|(frets, fo)| seen.insert((frets.clone(), *fo)));
+
     results
 }
 
@@ -330,7 +335,7 @@ pub fn playability_score(frets: &[FretPos]) -> i32 {
     unique_frets.sort();
     unique_frets.dedup();
     let finger_count = if has_barre {
-        unique_frets.len() // バレー自体も1本
+        unique_frets.len()
     } else {
         unique_frets.len()
     };
@@ -351,12 +356,48 @@ pub fn playability_score(frets: &[FretPos]) -> i32 {
     // ネックポジションペナルティ（高いフレットは弾きにくい）
     let neck_penalty = 0_i32.max(min_fret as i32 - 3) * 3;
 
+    // フレットスパン段階的ペナルティ（物理制約: スパンが大きいほど急増）
+    let span_penalty: i32 = match fret_span {
+        0..=2 => 0,
+        3     => 15,
+        4     => 30,
+        5     => 50,
+        _     => 80,
+    };
+
+    // 鳴らす弦数ボーナス（3弦超で +3/弦: 豊かなボイシングを優先）
+    let sounding_count = frets.iter().filter(|&&f| f != FretPos::Muted).count() as i32;
+    let sounding_bonus = (sounding_count - 3).max(0) * 3;
+
     100
-        - fret_span as i32 * 12
+        - span_penalty
         - finger_count as i32 * 5
         - muted_mid * 8
         + open_count * 5
         - neck_penalty
+        + sounding_bonus
+}
+
+// ==================== ルートオンベースボーナス ====================
+
+/// 最低音弦がルート音を鳴らしている場合 +15 を返す（voice leading: 自然な低音配置）
+fn root_on_bass_bonus(
+    frets: &[FretPos],
+    fret_offset: u32,
+    string_open: &[u8],
+    root: u8,
+) -> i32 {
+    for (idx, fret_pos) in frets.iter().enumerate() {
+        let note = match fret_pos {
+            FretPos::Muted => continue,
+            FretPos::Open => string_open[idx] % 12,
+            FretPos::Fret(f) => {
+                ((string_open[idx] as u32 + *f as u32 + fret_offset) % 12) as u8
+            }
+        };
+        return if note == root { 15 } else { 0 };
+    }
+    0
 }
 
 // ==================== 任意チューニング対応ボイシング探索 ====================
@@ -433,6 +474,10 @@ pub fn generate_voicings_for_tuning(
         enumerate_voicings_n(&per_string, 0, &mut combo, &mandatory, &mut results, n_strings);
     }
 
+    // ウィンドウ重複で生成された同一ボイシングを除去
+    let mut seen = HashSet::new();
+    results.retain(|(frets, fo)| seen.insert((frets.clone(), *fo)));
+
     results
 }
 
@@ -449,7 +494,11 @@ pub fn best_voicing_for_tuning(
 
     generate_voicings_for_tuning(chord, string_open)
         .into_iter()
-        .max_by_key(|(frets, fo)| playability_score(frets) - *fo as i32 * 3)
+        .max_by_key(|(frets, fo)| {
+            playability_score(frets)
+            - *fo as i32 * 3
+            + root_on_bass_bonus(frets, *fo, string_open, chord.root)
+        })
 }
 
 // ==================== パブリックAPI ====================
@@ -462,13 +511,21 @@ pub fn best_caged_voicing(chord: &ChordName) -> Option<(Vec<FretPos>, u32)> {
         // テンションコード: 全弦探索
         let voicings = generate_tension_voicings(chord);
         return voicings.into_iter()
-            .max_by_key(|(frets, fo)| playability_score(frets) - *fo as i32 * 3)
+            .max_by_key(|(frets, fo)| {
+                playability_score(frets)
+                - *fo as i32 * 3
+                + root_on_bass_bonus(frets, *fo, &STRING_OPEN, chord.root)
+            })
             .map(|(frets, fo)| (frets, fo));
     }
 
     templates.iter()
         .map(|t| transpose_template(t, chord.root))
-        .max_by_key(|(frets, fo)| playability_score(frets) - *fo as i32 * 3)
+        .max_by_key(|(frets, fo)| {
+            playability_score(frets)
+            - *fo as i32 * 3
+            + root_on_bass_bonus(frets, *fo, &STRING_OPEN, chord.root)
+        })
 }
 
 /// コード名 + CAGED形状指定 ('C','A','G','E','D') でボイシングを返す
