@@ -92,6 +92,21 @@
       <label><input type="checkbox" id="show_notes" /> Show note names</label>
     </div>
 
+    <div style="display:flex; gap:1rem; margin-bottom:1rem; flex-wrap:wrap; align-items:flex-end;">
+      <div>
+        <label for="strings" style="margin-bottom:0.3rem;">Strings</label>
+        <select id="strings" style="padding:0.45rem 0.6rem; border:1px solid #ccc; border-radius:6px; font-size:0.95rem;">
+          <option value="4">4 (Bass)</option>
+          <option value="6" selected>6 (Guitar)</option>
+          <option value="7">7 (7-string)</option>
+        </select>
+      </div>
+      <div style="flex:1; min-width:160px;">
+        <label for="tuning" style="margin-bottom:0.3rem;">Tuning <span style="font-weight:normal;color:#888;">(overrides Strings)</span></label>
+        <input type="text" id="tuning" placeholder="e.g. DADGBE, DAEAC#E" style="margin-bottom:0;" />
+      </div>
+    </div>
+
     <button id="btn" onclick="generate()">Generate</button>
     <span id="loading" style="display:none; margin-left:0.75rem;">Loading WASM…</span>
     <div id="error"></div>
@@ -120,6 +135,8 @@
       const vertical  = document.getElementById('vertical').checked;
       const show_ox   = document.getElementById('show_ox').checked;
       const show_notes = document.getElementById('show_notes').checked;
+      const strings   = parseInt(document.getElementById('strings').value) || 6;
+      const tuning    = document.getElementById('tuning').value.trim();
       const errEl     = document.getElementById('error');
       const outEl     = document.getElementById('output');
 
@@ -127,7 +144,7 @@
       if (!input) { outEl.innerHTML = ''; return; }
 
       try {
-        const svg = chord_to_svg(input, vertical, show_ox, 0, show_notes);
+        const svg = chord_to_svg(input, vertical, show_ox, 0, show_notes, strings, tuning);
         if (svg.startsWith('<!-- Error')) {
           errEl.textContent = svg.replace(/<!--\s*|\s*-->/g, '');
           outEl.innerHTML = '';
@@ -143,6 +160,12 @@
     // Generate on Enter key
     document.getElementById('input').addEventListener('keydown', e => {
       if (e.key === 'Enter') window.generate();
+    });
+
+    // Disable strings selector when tuning is specified
+    document.getElementById('tuning').addEventListener('input', () => {
+      document.getElementById('strings').disabled =
+        document.getElementById('tuning').value.trim() !== '';
     });
 
     load();
