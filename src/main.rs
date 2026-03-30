@@ -1,4 +1,4 @@
-use num2tab::chord::{best_voicing_for_tuning, caged_voicing_by_shape, parse_chord_name};
+use num2tab::chord::{best_voicing_for_tuning, caged_voicing_by_shape, parse_chord_name, ranked_voicings_for_tuning, voicing_score};
 use num2tab::{
     fret_count, get_string_open, parse_fret_string, parse_tuning,
     render_horizontal, render_vertical,
@@ -67,6 +67,15 @@ struct Args {
     /// Overrides --strings.
     #[arg(long = "tuning")]
     tuning: Option<String>,
+
+    /// List top N voicings instead of generating an image (e.g. --list, --list 10, --list all)
+    /// Default N is 5 when flag is given without a value.
+    #[arg(long = "list", num_args = 0..=1, default_missing_value = "5")]
+    list: Option<String>,
+
+    /// Select the Nth voicing (1-indexed) from the ranked candidate list
+    #[arg(long = "voicing")]
+    voicing: Option<usize>,
 }
 
 // ==================== フォント ====================
@@ -314,6 +323,18 @@ fn save_svg(frets: &[FretPos], show_ox: bool, vertical: bool, fret_offset: u32, 
 
 // ==================== main ====================
 
+fn format_frets(frets: &[FretPos]) -> String {
+    frets.iter().map(|f| match f {
+        FretPos::Muted  => 'x',
+        FretPos::Open   => '0',
+        FretPos::Fret(n) => char::from_digit(*n as u32, 10).unwrap_or('?'),
+    }).collect()
+}
+
+fn parse_list_limit(s: &str) -> Option<usize> {
+    if s.eq_ignore_ascii_case("all") { None } else { s.parse().ok() }
+}
+
 fn auto_output_name(input: &str) -> String {
     let safe: String = input.chars().map(|c| {
         if matches!(c, '/' | '\\' | ':' | '*' | '?' | '"' | '<' | '>' | '|') { '_' } else { c }
@@ -346,6 +367,8 @@ fn main() {
             .mut_arg("show_notes", |a| a.help("押弦位置に音名を表示（ドットの代わり）"))
             .mut_arg("strings", |a| a.help("弦数: 4（ベース）, 6（標準ギター、デフォルト）, 7（7弦ギター）"))
             .mut_arg("tuning", |a| a.help("変則チューニング（低音弦→高音弦の音名, 例: EADGBE, DADGBbE, DADGAD）"))
+            .mut_arg("list", |a| a.help("ボイシング候補を一覧表示（画像出力なし）。件数省略時は5件、数字またはallで指定可"))
+            .mut_arg("voicing", |a| a.help("N番目のボイシングを選択（1始まり）"))
             .get_matches();
         Args::from_arg_matches(&matches).unwrap_or_else(|e| e.exit())
     } else {
@@ -384,10 +407,55 @@ fn main() {
 
     let is_standard_tuning = string_open == get_string_open(6);
 
+    // --voicing と --caged-* の排他チェック
+    if caged_shape.is_some() && args.voicing.is_some() {
+        if ja {
+            eprintln!("エラー: --voicing と --caged-* は同時に使用できません");
+        } else {
+            eprintln!("Error: --voicing and --caged-* cannot be used together");
+        }
+        std::process::exit(1);
+    }
+
     let (frets, fret_offset) = if let Some(f) = parse_fret_string(&args.input, string_count) {
+        if args.list.is_some() || args.voicing.is_some() {
+            if ja {
+                eprintln!("エラー: --list / --voicing はコード名入力時のみ有効です");
+            } else {
+                eprintln!("Error: --list / --voicing are only valid with chord name input");
+            }
+            std::process::exit(1);
+        }
         (f, args.fret)
     } else if let Some(chord) = parse_chord_name(&args.input) {
-        let voicing = if let Some(shape) = caged_shape {
+        // --list モード: 候補一覧を表示して終了
+        if let Some(ref list_str) = args.list {
+            let candidates = ranked_voicings_for_tuning(&chord, string_open);
+            let limit = parse_list_limit(list_str);
+            let iter: Box<dyn Iterator<Item = _>> = match limit {
+                Some(n) => Box::new(candidates.iter().enumerate().take(n)),
+                None    => Box::new(candidates.iter().enumerate()),
+            };
+            for (i, (f, fo)) in iter {
+                let score = voicing_score(f, *fo, string_open, chord.root);
+                println!("{}: {}  score={}  (pos={})", i + 1, format_frets(f), score, fo);
+            }
+            return;
+        }
+
+        let voicing = if let Some(n) = args.voicing {
+            // --voicing N: N番目の候補（1始まり）
+            let candidates = ranked_voicings_for_tuning(&chord, string_open);
+            if n == 0 || n > candidates.len() {
+                if ja {
+                    eprintln!("エラー: --voicing {} は範囲外です（候補数: {}）", n, candidates.len());
+                } else {
+                    eprintln!("Error: --voicing {} out of range (available: {})", n, candidates.len());
+                }
+                std::process::exit(1);
+            }
+            Some(candidates.into_iter().nth(n - 1).unwrap())
+        } else if let Some(shape) = caged_shape {
             if !is_standard_tuning {
                 if ja {
                     eprintln!("エラー: --caged-* オプションは標準チューニング (EADGBE) が必要です");
