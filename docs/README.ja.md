@@ -59,6 +59,8 @@ num2tab G7 -o G7.png
 | `--caged-d` | `-D` | CAGED D 形状を使用 |
 | `--tuning NOTES` | | 代替／カスタムチューニング（例: `DAEAC#E`） |
 | `--strings N` | | 弦の本数（デフォルト: 6） |
+| `--list [N\|all]` | | ボイシング候補を一覧表示（画像出力なし、デフォルト: 5件） |
+| `--voicing N` | | N番目のボイシングを選択（1始まり） |
 
 ### 出力形式
 
@@ -151,6 +153,38 @@ num2tab C -E --ox -o C_Eshape.png   # E 形状（ハイポジ）
 | C 形状 | E 形状 |
 |--------|--------|
 | ![C shape](images/option_caged_C.png) | ![E shape](images/option_caged_E.png) |
+
+### ボイシング選択（`--list` / `--voicing`）
+
+コード名入力時に、スコア順の候補一覧を確認して選択できます。
+
+```bash
+# 上位5件を表示（デフォルト）
+num2tab Am --list
+
+# N件表示
+num2tab G7 --list 3
+
+# 全件表示
+num2tab C --list all
+```
+
+出力形式:
+```
+1: x02210  score=121  (pos=0)
+2: 133111  score=102  (pos=4)
+3: x13321  score=73   (pos=11)
+```
+
+`score` は弾きやすさスコア（高いほど弾きやすい）、`pos` は最低フレット位置です。
+
+候補が決まったら番号で指定して画像生成:
+
+```bash
+num2tab Am --voicing 2 -o Am2.png
+```
+
+> `--voicing` と `--caged-*` は同時に使用できません。
 
 ## コード名入力
 

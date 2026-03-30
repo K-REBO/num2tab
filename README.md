@@ -59,6 +59,8 @@ num2tab G7 -o G7.png
 | `--caged-d` | `-D` | Use CAGED D shape |
 | `--tuning NOTES` | | Alternate/custom tuning (e.g. `DAEAC#E`) |
 | `--strings N` | | Number of strings (default: 6) |
+| `--list [N\|all]` | | List ranked voicing candidates instead of generating an image (default: 5) |
+| `--voicing N` | | Select the Nth voicing (1-indexed) from the ranked list |
 
 ### Output Formats
 
@@ -151,6 +153,38 @@ num2tab C -E --ox -o C_Eshape.png   # E shape (high position)
 | C shape | E shape |
 |---------|---------|
 | ![C shape](docs/images/option_caged_C.png) | ![E shape](docs/images/option_caged_E.png) |
+
+### Voicing Selection (`--list` / `--voicing`)
+
+For chord name input, you can browse and choose from multiple ranked voicing candidates.
+
+```bash
+# List top 5 candidates (default)
+num2tab Am --list
+
+# List top N candidates
+num2tab G7 --list 3
+
+# List all candidates
+num2tab C --list all
+```
+
+Output format:
+```
+1: x02210  score=121  (pos=0)
+2: 133111  score=102  (pos=4)
+3: x13321  score=73   (pos=11)
+```
+
+`score` is the playability score (higher is easier to play). `pos` is the starting fret position.
+
+Once you find the voicing you want, select it by number:
+
+```bash
+num2tab Am --voicing 2 -o Am2.png
+```
+
+> `--voicing` and `--caged-*` cannot be used together.
 
 ## Chord Name Input
 
