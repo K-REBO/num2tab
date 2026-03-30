@@ -354,16 +354,37 @@ pub fn chord_to_svg(
     show_ox: bool,
     fret_offset: u32,
     show_notes: bool,
+    strings: u32,
+    tuning: &str,
 ) -> String {
-    use chord::{best_caged_voicing, parse_chord_name};
-    let string_open = get_string_open(6);
+    use chord::{best_caged_voicing, best_voicing_for_tuning, parse_chord_name};
 
-    let frets = if let Some(f) = parse_fret_string(input, 6) {
+    let string_open_owned: Vec<u8>;
+    let string_open: &[u8] = if !tuning.is_empty() {
+        match parse_tuning(tuning) {
+            Some(v) => { string_open_owned = v; &string_open_owned }
+            None => return format!("<!-- Error: Invalid tuning '{}' -->", tuning),
+        }
+    } else {
+        get_string_open(strings)
+    };
+
+    let num_strings = string_open.len();
+
+    let frets = if let Some(f) = parse_fret_string(input, num_strings) {
         f
     } else if let Some(chord_name) = parse_chord_name(input) {
-        match best_caged_voicing(&chord_name) {
-            Some((f, _fo)) => f,
-            None => return format!("<!-- Error: No voicing found for '{}' -->", input),
+        let is_standard = string_open == get_string_open(6);
+        if is_standard {
+            match best_caged_voicing(&chord_name) {
+                Some((f, _fo)) => f,
+                None => return format!("<!-- Error: No voicing found for '{}' -->", input),
+            }
+        } else {
+            match best_voicing_for_tuning(&chord_name, string_open) {
+                Some((f, _fo)) => f,
+                None => return format!("<!-- Error: No voicing found for '{}' -->", input),
+            }
         }
     } else {
         return format!("<!-- Error: Cannot parse input '{}' -->", input);
