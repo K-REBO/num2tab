@@ -400,6 +400,12 @@ fn root_on_bass_bonus(
     0
 }
 
+// ==================== スコア計算 ====================
+
+pub fn voicing_score(frets: &[FretPos], fo: u32, string_open: &[u8], root: u8) -> i32 {
+    playability_score(frets) - fo as i32 * 3 + root_on_bass_bonus(frets, fo, string_open, root)
+}
+
 // ==================== 任意チューニング対応ボイシング探索 ====================
 
 /// 任意チューニングの1弦分の候補を返す（string_candidatesの汎用版）
@@ -487,18 +493,31 @@ pub fn best_voicing_for_tuning(
     chord: &ChordName,
     string_open: &[u8],
 ) -> Option<(Vec<FretPos>, u32)> {
-    // 標準6弦チューニングならCAGEDを使う
-    if string_open == [4u8, 9, 2, 7, 11, 4] {
-        return best_caged_voicing(chord);
-    }
+    ranked_voicings_for_tuning(chord, string_open).into_iter().next()
+}
 
-    generate_voicings_for_tuning(chord, string_open)
-        .into_iter()
-        .max_by_key(|(frets, fo)| {
-            playability_score(frets)
-            - *fo as i32 * 3
-            + root_on_bass_bonus(frets, *fo, string_open, chord.root)
-        })
+/// スコア降順にランク付けされたボイシング候補リストを返す
+/// 標準6弦チューニングの場合はCAGEDテンプレートを使用
+pub fn ranked_voicings_for_tuning(
+    chord: &ChordName,
+    string_open: &[u8],
+) -> Vec<(Vec<FretPos>, u32)> {
+    let mut candidates: Vec<(Vec<FretPos>, u32)> = if string_open == [4u8, 9, 2, 7, 11, 4] {
+        let templates = get_templates(chord.quality);
+        if templates.is_empty() {
+            generate_tension_voicings(chord)
+        } else {
+            templates.iter().map(|t| transpose_template(t, chord.root)).collect()
+        }
+    } else {
+        generate_voicings_for_tuning(chord, string_open)
+    };
+    // 重複除去
+    let mut seen = HashSet::new();
+    candidates.retain(|(frets, fo)| seen.insert((frets.clone(), *fo)));
+
+    candidates.sort_by_key(|(frets, fo)| std::cmp::Reverse(voicing_score(frets, *fo, string_open, chord.root)));
+    candidates
 }
 
 // ==================== パブリックAPI ====================
@@ -509,23 +528,14 @@ pub fn best_caged_voicing(chord: &ChordName) -> Option<(Vec<FretPos>, u32)> {
 
     if templates.is_empty() {
         // テンションコード: 全弦探索
-        let voicings = generate_tension_voicings(chord);
-        return voicings.into_iter()
-            .max_by_key(|(frets, fo)| {
-                playability_score(frets)
-                - *fo as i32 * 3
-                + root_on_bass_bonus(frets, *fo, &STRING_OPEN, chord.root)
-            })
-            .map(|(frets, fo)| (frets, fo));
+        return generate_tension_voicings(chord)
+            .into_iter()
+            .max_by_key(|(frets, fo)| voicing_score(frets, *fo, &STRING_OPEN, chord.root));
     }
 
     templates.iter()
         .map(|t| transpose_template(t, chord.root))
-        .max_by_key(|(frets, fo)| {
-            playability_score(frets)
-            - *fo as i32 * 3
-            + root_on_bass_bonus(frets, *fo, &STRING_OPEN, chord.root)
-        })
+        .max_by_key(|(frets, fo)| voicing_score(frets, *fo, &STRING_OPEN, chord.root))
 }
 
 /// コード名 + CAGED形状指定 ('C','A','G','E','D') でボイシングを返す
