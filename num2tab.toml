@@ -1,0 +1,60 @@
+# =========================
+# num2tab default config
+# =========================
+
+[output]
+# デフォルト出力ファイル形式
+format = "png"        # png / jpg / svg
+
+# 自動命名を使うか
+auto_name = true
+
+# 出力ディレクトリ（空ならカレント）
+dir = "./chords"
+
+[display]
+
+vertical = true
+# 開放弦・ミュート表示（○ / ×）
+ox_marker = true
+
+# 音名表示（ドットの代わり）
+notes = false
+
+# フレット番号表示
+show_fret_number = true
+
+# フレット数（表示する段数）
+fret_count = 5
+
+
+[instrument]
+# 弦数
+strings = 6
+
+# チューニング（空なら標準 EADGBE）
+tuning = "EADGBE"
+
+
+[caged]
+# デフォルトで使う形（空なら自動選択）
+# "C", "A", "G", "E", "D"
+preferred_shape = ""
+
+
+[naming]
+
+
+[style]
+# 将来拡張を想定
+# 色やサイズ系
+
+# 画像サイズ
+width = 512
+height = 512
+
+# 線の太さ
+line_width = 2
+
+# フォントサイズ
+font_size = 18
